@@ -1,0 +1,10 @@
+{
+  "name": "Arun's Personal Assistant",
+  "description": "Arun's Personal Assistant - Built using Llama and Google AI Studio with local voice orchestration, markdown formatting, and document exports.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
