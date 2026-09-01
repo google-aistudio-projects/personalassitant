@@ -15,7 +15,10 @@ import {
   Flame, 
   Code, 
   BookOpen, 
-  Zap 
+  Zap,
+  Trash2,
+  HardDrive,
+  MessageSquare
 } from 'lucide-react';
 
 interface OllamaConfigProps {
@@ -25,6 +28,12 @@ interface OllamaConfigProps {
   availableModels: OllamaModel[];
   isRefreshingModels: boolean;
   connectionStatus: 'checking' | 'connected' | 'failed' | 'idle';
+  onPurgeVram?: () => void;
+  isPurgingVram?: boolean;
+  purgeSuccess?: boolean;
+  onClearSessionContext?: () => void;
+  sessionTurnsCount?: number;
+  onToggleLowVramMode?: (enable?: boolean) => void;
 }
 
 export default function OllamaConfig({
@@ -33,7 +42,13 @@ export default function OllamaConfig({
   onRefreshModels,
   availableModels,
   isRefreshingModels,
-  connectionStatus
+  connectionStatus,
+  onPurgeVram,
+  isPurgingVram = false,
+  purgeSuccess = false,
+  onClearSessionContext,
+  sessionTurnsCount = 0,
+  onToggleLowVramMode
 }: OllamaConfigProps) {
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [showCorsHelp, setShowCorsHelp] = useState(false);
@@ -74,6 +89,16 @@ export default function OllamaConfig({
   const applyPreset = (presetName: string) => {
     setActivePreset(presetName);
     switch (presetName) {
+      case 'low_vram_mac':
+        onChange({
+          ...config,
+          lowVramMode: true,
+          numCtx: 2048,
+          maxContextTurns: 2,
+          keepAlive: '0s',
+          temperature: 0.6
+        });
+        break;
       case 'voice_assistant':
         onChange({
           ...config,
@@ -197,7 +222,22 @@ export default function OllamaConfig({
         <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-2.5">
           Quick Configuration Presets:
         </span>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+          <button
+            type="button"
+            onClick={() => applyPreset('low_vram_mac')}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              activePreset === 'low_vram_mac' || config.lowVramMode
+                ? 'bg-amber-950/60 border-amber-500 text-amber-200 shadow-md' 
+                : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 font-semibold text-xs text-amber-400 mb-1">
+              <Zap className="w-3.5 h-3.5" /> 2016 Mac Mode
+            </div>
+            <p className="text-[11px] text-slate-400">2048 ctx, 0s keep_alive, 2 turns history.</p>
+          </button>
+
           <button
             type="button"
             onClick={() => applyPreset('voice_assistant')}
@@ -263,8 +303,157 @@ export default function OllamaConfig({
       {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Left Column: Ollama Service & Wake Word */}
+        {/* Left Column: Memory & Context Engines + Ollama Service */}
         <div className="space-y-6">
+
+          {/* VRAM & MEMORY PROFILE (2016 MacBook Fix) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-semibold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-amber-400" /> VRAM & Memory Footprint Engine
+              </h3>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/80 text-amber-300">
+                2016 Mac Fix
+              </span>
+            </div>
+
+            {/* Low VRAM Toggle */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-white block">Low-VRAM Optimization Profile</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Limits context window to 2048 and sets <code className="text-sky-300 font-mono">keep_alive: 0s</code> to unload the model immediately after responding.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onToggleLowVramMode) {
+                    onToggleLowVramMode();
+                  } else {
+                    onChange({ ...config, lowVramMode: !config.lowVramMode });
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border shrink-0 ${
+                  config.lowVramMode
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {config.lowVramMode ? 'ENABLED (0s Keep-Alive)' : 'DISABLED'}
+              </button>
+            </div>
+
+            {/* Keep Alive Selector */}
+            <div>
+              <div className="flex justify-between items-center text-xs mb-1.5 font-mono">
+                <span className="text-slate-300">Ollama VRAM Keep-Alive (`keep_alive`)</span>
+                <span className="text-sky-400 font-bold">{config.keepAlive || '0s'}</span>
+              </div>
+              <select
+                name="keepAlive"
+                value={config.keepAlive || '0s'}
+                onChange={handleTextChange}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-sky-500"
+              >
+                <option value="0s">0s — Unload immediately (Zero VRAM idle - Best for 2016 Mac)</option>
+                <option value="1m">1m — Unload after 1 minute of inactivity</option>
+                <option value="5m">5m — Standard (Keep in VRAM for 5 minutes)</option>
+                <option value="15m">15m — Keep loaded for 15 minutes</option>
+                <option value="-1">-1 — Keep in VRAM indefinitely (High memory)</option>
+              </select>
+            </div>
+
+            {/* Manual Purge Action Bar */}
+            {onPurgeVram && (
+              <div className="pt-2 flex items-center justify-between border-t border-slate-800 text-xs font-mono">
+                <span className="text-slate-400">Manual VRAM Cleanup:</span>
+                <button
+                  type="button"
+                  onClick={onPurgeVram}
+                  disabled={isPurgingVram}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/80 transition font-bold"
+                >
+                  {isPurgingVram ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 text-rose-400" />}
+                  <span>{isPurgingVram ? 'Evicting VRAM...' : purgeSuccess ? '✓ VRAM Cleared!' : 'Evict Model from VRAM'}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* SESSIONFUL CONTEXT & CONTINUOUS MEMORY */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-semibold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-emerald-400" /> Sessional Context (Gemini / ChatGPT Style)
+              </h3>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/80 text-emerald-300">
+                Multi-Turn Memory
+              </span>
+            </div>
+
+            {/* Enable Context Toggle */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-white block">Continuous Multi-Turn Context</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Sends conversational history into subsequent requests so Ollama remembers previous answers.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onChange({ ...config, enableSessionContext: !config.enableSessionContext })}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border shrink-0 ${
+                  config.enableSessionContext
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {config.enableSessionContext ? 'CHAINING ON' : 'STATELESS (OFF)'}
+              </button>
+            </div>
+
+            {/* Max History Turns Slider */}
+            {config.enableSessionContext && (
+              <div>
+                <div className="flex justify-between text-xs mb-1.5 font-mono">
+                  <span className="text-slate-300">Max Memory Retention ({config.maxContextTurns || 2} turns)</span>
+                  <span className="text-sky-400 font-bold">{(config.maxContextTurns || 2) * 2} messages</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="6"
+                  step="1"
+                  value={config.maxContextTurns || 2}
+                  onChange={(e) => handleNumberChange('maxContextTurns', parseInt(e.target.value))}
+                  className="w-full accent-sky-500 bg-slate-950 rounded-lg appearance-none h-2 cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                  <span>1 Turn (Lowest VRAM)</span>
+                  <span>2 Turns (Mac default)</span>
+                  <span>6 Turns (Deep Memory)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Context Buffer Status & Reset */}
+            <div className="pt-2 flex items-center justify-between border-t border-slate-800 text-xs font-mono">
+              <span className="text-slate-400">
+                Active Buffer: <strong className="text-white">{sessionTurnsCount} turn(s)</strong>
+              </span>
+              {onClearSessionContext && (
+                <button
+                  type="button"
+                  onClick={onClearSessionContext}
+                  disabled={sessionTurnsCount === 0}
+                  className="px-2.5 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-rose-300 disabled:opacity-40 border border-slate-700 rounded transition"
+                >
+                  Clear Memory Buffer
+                </button>
+              )}
+            </div>
+          </div>
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
             <h3 className="text-sm font-semibold text-white font-mono uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
               <Cpu className="w-4 h-4 text-sky-400" /> Ollama Connection & Model Target

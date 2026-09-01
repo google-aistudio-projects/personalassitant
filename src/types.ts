@@ -1,3 +1,11 @@
+export interface ChatMessage {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  tokens?: number;
+}
+
 export interface VoiceConfig {
   ollamaUrl: string;
   model: string;
@@ -8,6 +16,11 @@ export interface VoiceConfig {
   voicePitch: number;
   voiceVolume: number;
   continuousListening: boolean;
+  // Sessionalful Context & Memory Control (2016 Mac optimizations)
+  enableSessionContext: boolean;
+  maxContextTurns: number;
+  keepAlive: string; // '0s' (unload immediately), '1m', '5m', '10m', '-1' (indefinite)
+  lowVramMode: boolean;
   // Finer LLM parameters
   temperature: number;
   topP: number;

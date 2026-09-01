@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
-import { VoiceConfig, MetricsRun, ResponseMetrics } from '../types';
+import { VoiceConfig, MetricsRun, ResponseMetrics, ChatMessage } from '../types';
 import VoiceWaveform from './VoiceWaveform';
 import { 
   Send, 
@@ -32,14 +32,23 @@ import {
   ChevronDown,
   History,
   Sliders,
-  Share2
+  Share2,
+  MessageSquare,
+  Cpu
 } from 'lucide-react';
 
 interface StudioViewProps {
   config: VoiceConfig;
+  onChangeConfig?: React.Dispatch<React.SetStateAction<VoiceConfig>>;
   status: 'idle' | 'listening_wake' | 'recording_command' | 'processing' | 'speaking' | 'disabled';
   runs: MetricsRun[];
   latestMetrics: ResponseMetrics | null;
+  sessionMessages?: ChatMessage[];
+  onClearSessionContext?: () => void;
+  onPurgeVram?: () => void;
+  isPurgingVram?: boolean;
+  purgeSuccess?: boolean;
+  onToggleLowVramMode?: (enable?: boolean) => void;
   isSpeaking: boolean;
   isListening: boolean;
   onStartListening: () => void;
@@ -52,9 +61,16 @@ interface StudioViewProps {
 
 export default function StudioView({
   config,
+  onChangeConfig,
   status,
   runs,
   latestMetrics,
+  sessionMessages = [],
+  onClearSessionContext,
+  onPurgeVram,
+  isPurgingVram = false,
+  purgeSuccess = false,
+  onToggleLowVramMode,
   isSpeaking,
   isListening,
   onStartListening,
@@ -70,6 +86,7 @@ export default function StudioView({
   const [copiedResponse, setCopiedResponse] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [showContextPreview, setShowContextPreview] = useState(false);
   const [showWaveform, setShowWaveform] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const printContainerRef = useRef<HTMLDivElement>(null);
@@ -312,6 +329,45 @@ export default function StudioView({
 
         {/* Quick Actions & Status */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Low VRAM / 2016 MacBook Profile Button */}
+          {onToggleLowVramMode && (
+            <button
+              onClick={() => onToggleLowVramMode()}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono border transition-all ${
+                config.lowVramMode 
+                  ? 'bg-amber-950/60 border-amber-600/70 text-amber-300 shadow-sm' 
+                  : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'
+              }`}
+              title="Toggle Low-VRAM mode (limits ctx to 2048 and sets keep_alive to 0s to save MacBook GPU/RAM)"
+            >
+              <Zap className={`w-3.5 h-3.5 ${config.lowVramMode ? 'text-amber-400 fill-amber-400/20' : 'text-slate-400'}`} />
+              <span>2016 Mac Mode: <strong>{config.lowVramMode ? 'ON' : 'OFF'}</strong></span>
+            </button>
+          )}
+
+          {/* VRAM Purge Quick Action */}
+          {onPurgeVram && (
+            <button
+              onClick={onPurgeVram}
+              disabled={isPurgingVram}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono border transition-all ${
+                purgeSuccess 
+                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300' 
+                  : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700'
+              }`}
+              title="Explicitly unload model from VRAM/RAM to free up laptop memory"
+            >
+              {isPurgingVram ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
+              ) : purgeSuccess ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              )}
+              <span>{isPurgingVram ? 'Purging...' : purgeSuccess ? 'VRAM Cleared' : 'Purge VRAM'}</span>
+            </button>
+          )}
+
           {/* Hands-free Voice Toggle */}
           <button
             onClick={isListening ? onStopListening : onStartListening}
@@ -349,6 +405,96 @@ export default function StudioView({
           </button>
         </div>
       </div>
+
+      {/* Sessional Context Buffer & Memory Status Indicator */}
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${config.enableSessionContext ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            <span className="text-slate-300 font-semibold">
+              Context Memory: {config.enableSessionContext ? `Active (Chaining ${config.maxContextTurns || 2} turns)` : 'Disabled (Stateless)'}
+            </span>
+          </div>
+
+          <span className="text-slate-600 hidden sm:inline">•</span>
+
+          <span className="text-slate-400 text-[11px]">
+            {sessionMessages.length > 0 ? (
+              <span>Buffer contains <strong className="text-sky-300">{Math.floor(sessionMessages.length / 2)} turn(s)</strong> ({sessionMessages.length} total messages)</span>
+            ) : (
+              <span className="text-slate-500">Context buffer empty (fresh conversation)</span>
+            )}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {sessionMessages.length > 0 && (
+            <>
+              <button
+                onClick={() => setShowContextPreview(!showContextPreview)}
+                className="text-[11px] px-2 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded border border-slate-700 transition-colors flex items-center gap-1"
+              >
+                <MessageSquare className="w-3 h-3 text-sky-400" />
+                <span>{showContextPreview ? 'Hide Context Turns' : 'Inspect Context'}</span>
+              </button>
+
+              {onClearSessionContext && (
+                <button
+                  onClick={onClearSessionContext}
+                  className="text-[11px] px-2 py-1 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded transition-colors flex items-center gap-1"
+                  title="Clear conversation history to reset context and free VRAM"
+                >
+                  <Trash2 className="w-3 h-3 text-rose-400" />
+                  <span>Reset Context</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {onChangeConfig && (
+            <button
+              onClick={() => onChangeConfig(prev => ({ ...prev, enableSessionContext: !prev.enableSessionContext }))}
+              className={`text-[11px] px-2.5 py-1 rounded border font-semibold transition-all ${
+                config.enableSessionContext
+                  ? 'bg-emerald-950/60 border-emerald-600 text-emerald-300'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {config.enableSessionContext ? 'Context Chaining: ON' : 'Context Chaining: OFF'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Context Inspection Drawer */}
+      <AnimatePresence>
+        {showContextPreview && sessionMessages.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono space-y-2.5"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-slate-400">
+              <span className="flex items-center gap-1.5 text-sky-300 font-semibold">
+                <MessageSquare className="w-3.5 h-3.5" /> Active Messages Sent to Ollama in Next Request
+              </span>
+              <span className="text-[10px] text-slate-500">Only the last {config.maxContextTurns * 2} messages will be passed to stay light on VRAM</span>
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+              {sessionMessages.slice(-config.maxContextTurns * 2).map((msg, i) => (
+                <div key={msg.id || i} className={`p-2.5 rounded-lg border text-left ${msg.role === 'user' ? 'bg-sky-950/30 border-sky-800/60 text-sky-100' : 'bg-slate-900 border-slate-800 text-slate-300'}`}>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                    <strong className={msg.role === 'user' ? 'text-sky-400 uppercase' : 'text-emerald-400 uppercase'}>{msg.role}</strong>
+                    <span>{msg.timestamp}</span>
+                  </div>
+                  <p className="line-clamp-2 text-xs font-sans">{msg.content}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Audio Waveform Bar if active or enabled */}
       <AnimatePresence>

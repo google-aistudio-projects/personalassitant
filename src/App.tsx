@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { VoiceConfig, TerminalLog, OllamaModel, MetricsRun, ResponseMetrics } from './types';
+import { VoiceConfig, TerminalLog, OllamaModel, MetricsRun, ResponseMetrics, ChatMessage } from './types';
 import StudioView from './components/StudioView';
 import OllamaConfig from './components/OllamaConfig';
 import MetricsDashboard from './components/MetricsDashboard';
@@ -22,7 +22,9 @@ import {
   Mic,
   Layers,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  Trash2,
+  Zap
 } from 'lucide-react';
 
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -87,11 +89,16 @@ export default function App() {
     voicePitch: 1.0,
     voiceVolume: 1.0,
     continuousListening: true,
+    // Context & Memory Optimization (Ideal for 2016 MacBooks & low-RAM laptops)
+    enableSessionContext: true,
+    maxContextTurns: 2, // 2 previous turns prevents VRAM explosion while giving full continuity
+    keepAlive: '0s', // '0s' unloads model from VRAM immediately after generation
+    lowVramMode: true,
     // Hyperparameters
     temperature: 0.7,
     topP: 0.9,
     topK: 40,
-    numCtx: 4096,
+    numCtx: 2048, // 2048 context is super lightweight on 2016 Mac
     repeatPenalty: 1.1
   });
 
@@ -106,6 +113,11 @@ export default function App() {
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'checking' | 'connected' | 'failed'>('idle');
   const [manualText, setManualText] = useState('');
+  
+  // Session conversation memory for continuous context
+  const [sessionMessages, setSessionMessages] = useState<ChatMessage[]>([]);
+  const [isPurgingVram, setIsPurgingVram] = useState(false);
+  const [purgeSuccess, setPurgeSuccess] = useState(false);
 
   // Initial runs for workbench & studio display
   const [runs, setRuns] = useState<MetricsRun[]>([
@@ -302,57 +314,98 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
     }
   };
 
-  // Send query to Ollama API
+  // Send query to Ollama API with Sessionful Context Chaining & VRAM Management
   const sendQueryToOllama = async (prompt: string) => {
     setStatus('processing');
-    addLog('system', `Contacting Ollama model "${config.model}"...`);
-
     const cleanUrl = config.ollamaUrl.endsWith('/') ? config.ollamaUrl.slice(0, -1) : config.ollamaUrl;
     const startTime = performance.now();
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const response = await fetch(`${cleanUrl}/api/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: config.model,
-          prompt: `System Instructions: ${config.systemPrompt}\n\nUser: ${prompt}`,
-          stream: false,
-          options: {
-            temperature: config.temperature,
-            top_p: config.topP,
-            top_k: config.topK,
-            num_ctx: config.numCtx,
-            repeat_penalty: config.repeatPenalty
-          }
-        }),
-        signal: controller.signal
-      });
+      let assistantText = "";
+      let responseData: any = {};
 
-      clearTimeout(timeoutId);
+      if (config.enableSessionContext) {
+        // Take past turns (maxContextTurns pairs of user/assistant messages)
+        const recentTurns = sessionMessages.slice(-Math.max(1, config.maxContextTurns) * 2);
+        const chatMessages = [
+          { role: 'system', content: config.systemPrompt },
+          ...recentTurns.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content: prompt }
+        ];
 
-      if (!response.ok) {
-        throw new Error(`Server returned status code ${response.status}`);
+        addLog('system', `Contacting "${config.model}" via /api/chat with ${recentTurns.length / 2} prior turn(s) context...`);
+
+        const response = await fetch(`${cleanUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: config.model,
+            messages: chatMessages,
+            stream: false,
+            keep_alive: config.keepAlive || (config.lowVramMode ? "0s" : "5m"),
+            options: {
+              temperature: config.temperature,
+              top_p: config.topP,
+              top_k: config.topK,
+              num_ctx: config.numCtx,
+              repeat_penalty: config.repeatPenalty
+            }
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Server returned status code ${response.status}`);
+        }
+
+        responseData = await response.json();
+        assistantText = responseData.message?.content || responseData.response || "No response received.";
+      } else {
+        addLog('system', `Contacting "${config.model}" in single-turn stateless mode...`);
+        const response = await fetch(`${cleanUrl}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: config.model,
+            prompt: `System Instructions: ${config.systemPrompt}\n\nUser: ${prompt}`,
+            stream: false,
+            keep_alive: config.keepAlive || (config.lowVramMode ? "0s" : "5m"),
+            options: {
+              temperature: config.temperature,
+              top_p: config.topP,
+              top_k: config.topK,
+              num_ctx: config.numCtx,
+              repeat_penalty: config.repeatPenalty
+            }
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Server returned status code ${response.status}`);
+        }
+
+        responseData = await response.json();
+        assistantText = responseData.response || "No response received.";
       }
 
-      const data = await response.json();
-      const assistantText = data.response || "No response received.";
-      
       const endTime = performance.now();
       const clientTotalDuration = endTime - startTime;
 
-      const totalDurationMs = data.total_duration ? (data.total_duration / 1000000) : clientTotalDuration;
-      const loadDurationMs = data.load_duration ? (data.load_duration / 1000000) : (totalDurationMs * 0.05);
-      const promptEvalDurationMs = data.prompt_eval_duration ? (data.prompt_eval_duration / 1000000) : (totalDurationMs * 0.15);
-      const evalDurationMs = data.eval_duration ? (data.eval_duration / 1000000) : (totalDurationMs * 0.8);
+      const totalDurationMs = responseData.total_duration ? (responseData.total_duration / 1000000) : clientTotalDuration;
+      const loadDurationMs = responseData.load_duration ? (responseData.load_duration / 1000000) : (totalDurationMs * 0.05);
+      const promptEvalDurationMs = responseData.prompt_eval_duration ? (responseData.prompt_eval_duration / 1000000) : (totalDurationMs * 0.15);
+      const evalDurationMs = responseData.eval_duration ? (responseData.eval_duration / 1000000) : (totalDurationMs * 0.8);
       
-      const promptEvalCount = data.prompt_eval_count || Math.max(5, Math.round((config.systemPrompt.length + prompt.length) / 4));
-      const evalCount = data.eval_count || Math.max(1, Math.round(assistantText.length / 4));
+      const promptEvalCount = responseData.prompt_eval_count || Math.max(5, Math.round((config.systemPrompt.length + prompt.length) / 4));
+      const evalCount = responseData.eval_count || Math.max(1, Math.round(assistantText.length / 4));
       const tokensPerSecond = evalDurationMs > 0 ? (evalCount / (evalDurationMs / 1000)) : 35.0;
 
       const computedMetrics = {
@@ -385,13 +438,24 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
 
       setRuns(prev => [...prev, newRun]);
 
+      // Save to active session memory
+      setSessionMessages(prev => [
+        ...prev,
+        { id: Math.random().toString(), role: 'user', content: prompt, timestamp: runTimestamp },
+        { id: Math.random().toString(), role: 'assistant', content: assistantText, timestamp: runTimestamp, tokens: evalCount }
+      ]);
+
+      if (config.keepAlive === '0s' || config.lowVramMode) {
+        addLog('system', `⚡ [Low-VRAM Engine] Query completed. Model memory cleared immediately (keep_alive: 0s).`);
+      }
+
       playChime('success');
       speakResponse(assistantText);
 
     } catch (err: any) {
       playChime('error');
       const errorMsg = err.name === 'AbortError' 
-        ? 'Ollama request timed out (45s). Your model might be cold-starting or large.'
+        ? 'Ollama request timed out (60s). If your model is large, switch to Low-VRAM mode or a lighter model like llama3.2:1b.'
         : `Request Failed: Could not contact Ollama. Ensure your local Ollama server is running (with CORS enabled via OLLAMA_ORIGINS="*")`;
       addLog('error', errorMsg);
       
@@ -400,6 +464,62 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
       } else {
         setStatus('idle');
       }
+    }
+  };
+
+  // Manual VRAM purge / eviction
+  const handlePurgeVram = async () => {
+    setIsPurgingVram(true);
+    addLog('system', `[VRAM Engine] Sending explicit memory eviction for model "${config.model}"...`);
+    try {
+      const cleanUrl = config.ollamaUrl.endsWith('/') ? config.ollamaUrl.slice(0, -1) : config.ollamaUrl;
+      const res = await fetch(`${cleanUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.model,
+          keep_alive: 0
+        })
+      });
+      if (res.ok) {
+        addLog('system', `✓ VRAM Evicted: Model "${config.model}" unloaded from RAM/GPU memory. System memory reclaimed.`);
+        setPurgeSuccess(true);
+        setTimeout(() => setPurgeSuccess(false), 2500);
+      } else {
+        throw new Error(`Status ${res.status}`);
+      }
+    } catch (e: any) {
+      addLog('error', `VRAM purge request failed: ${e.message || 'Check Ollama'}`);
+    } finally {
+      setIsPurgingVram(false);
+    }
+  };
+
+  const handleClearSessionContext = () => {
+    setSessionMessages([]);
+    addLog('system', 'Session context buffer cleared. Next query will start fresh.');
+  };
+
+  const handleToggleLowVramMode = (enable?: boolean) => {
+    const target = enable !== undefined ? enable : !config.lowVramMode;
+    if (target) {
+      setConfig(prev => ({
+        ...prev,
+        lowVramMode: true,
+        numCtx: 2048,
+        maxContextTurns: 2,
+        keepAlive: '0s'
+      }));
+      addLog('system', '⚡ 2016 Mac Low-VRAM Profile ACTIVATED (Context: 2048, 2 turns history, keep_alive: 0s instant memory unload).');
+    } else {
+      setConfig(prev => ({
+        ...prev,
+        lowVramMode: false,
+        numCtx: 4096,
+        maxContextTurns: 5,
+        keepAlive: '5m'
+      }));
+      addLog('system', 'Standard Memory Profile restored (Context: 4096, 5 turns history, keep_alive: 5m).');
     }
   };
 
@@ -645,8 +765,45 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
             </button>
           </nav>
 
-          {/* Model Status Badge Shortcut */}
-          <div className="flex items-center gap-3">
+          {/* Model Status & Memory Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Low-VRAM 2016 MacBook Preset Toggle */}
+            <button
+              onClick={() => handleToggleLowVramMode()}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-mono transition-all ${
+                config.lowVramMode 
+                  ? 'bg-amber-950/60 border-amber-600/60 text-amber-300 shadow-sm' 
+                  : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+              title="Toggle 2016 MacBook / Low-RAM Mode (2048 ctx, 2 turns history, 0s keep_alive)"
+            >
+              <Zap className={`w-3.5 h-3.5 ${config.lowVramMode ? 'text-amber-400 fill-amber-400/20' : 'text-slate-500'}`} />
+              <span className="hidden sm:inline">2016 Mac Mode:</span>
+              <span className="font-bold">{config.lowVramMode ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Manual VRAM Eviction / Purge Button */}
+            <button
+              onClick={handlePurgeVram}
+              disabled={isPurgingVram}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-mono transition-all ${
+                purgeSuccess 
+                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300' 
+                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
+              }`}
+              title="Explicitly evict model from GPU VRAM / CPU RAM"
+            >
+              {isPurgingVram ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
+              ) : purgeSuccess ? (
+                <span className="text-emerald-400 font-bold text-[11px]">✓ Evicted</span>
+              ) : (
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              )}
+              <span className="hidden md:inline">{isPurgingVram ? 'Purging...' : purgeSuccess ? 'VRAM Cleared' : 'Purge VRAM'}</span>
+            </button>
+
+            {/* Model Status Badge Shortcut */}
             <button
               onClick={() => setActiveTab('config')}
               className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/90 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 font-mono transition-all group"
@@ -686,9 +843,16 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
             /* STUDIO VIEW: Full-canvas Request Sending & Structured Response Aggregation */
             <StudioView
               config={config}
+              onChangeConfig={setConfig}
               status={status}
               runs={runs}
               latestMetrics={latestMetrics}
+              sessionMessages={sessionMessages}
+              onClearSessionContext={handleClearSessionContext}
+              onPurgeVram={handlePurgeVram}
+              isPurgingVram={isPurgingVram}
+              purgeSuccess={purgeSuccess}
+              onToggleLowVramMode={handleToggleLowVramMode}
               isSpeaking={status === 'speaking'}
               isListening={isListeningRef.current}
               onStartListening={handleStartListening}
@@ -710,6 +874,12 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
               availableModels={availableModels}
               isRefreshingModels={connectionStatus === 'checking'}
               connectionStatus={connectionStatus}
+              onPurgeVram={handlePurgeVram}
+              isPurgingVram={isPurgingVram}
+              purgeSuccess={purgeSuccess}
+              onClearSessionContext={handleClearSessionContext}
+              sessionTurnsCount={Math.floor(sessionMessages.length / 2)}
+              onToggleLowVramMode={handleToggleLowVramMode}
             />
           ) : activeTab === 'dashboard' ? (
             /* WORKBENCH: Full view for telemetry charts, latency breakdowns, and prompt advice */
