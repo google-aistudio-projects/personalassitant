@@ -18,8 +18,15 @@ import {
   Zap,
   Trash2,
   HardDrive,
-  MessageSquare
+  MessageSquare,
+  Monitor,
+  Laptop,
+  Terminal,
+  Clipboard,
+  Folder
 } from 'lucide-react';
+import { OperatingSystem } from '../types';
+import { getOSLabel, OS_GUIDES } from '../utils/platform';
 
 interface OllamaConfigProps {
   config: VoiceConfig;
@@ -53,6 +60,7 @@ export default function OllamaConfig({
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [showCorsHelp, setShowCorsHelp] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [copiedCommand, setCopiedCommand] = useState(false);
 
   // Load browser voices
   useEffect(() => {
@@ -89,6 +97,7 @@ export default function OllamaConfig({
   const applyPreset = (presetName: string) => {
     setActivePreset(presetName);
     switch (presetName) {
+      case 'eco_laptop':
       case 'low_vram_mac':
         onChange({
           ...config,
@@ -97,6 +106,26 @@ export default function OllamaConfig({
           maxContextTurns: 2,
           keepAlive: '0s',
           temperature: 0.6
+        });
+        break;
+      case 'balanced_pc':
+        onChange({
+          ...config,
+          lowVramMode: false,
+          numCtx: 4096,
+          maxContextTurns: 4,
+          keepAlive: '5m',
+          temperature: 0.7
+        });
+        break;
+      case 'performance_gpu':
+        onChange({
+          ...config,
+          lowVramMode: false,
+          numCtx: 8192,
+          maxContextTurns: 6,
+          keepAlive: '15m',
+          temperature: 0.7
         });
         break;
       case 'voice_assistant':
@@ -217,25 +246,113 @@ export default function OllamaConfig({
         </div>
       )}
 
+      {/* Operating System Platform & Setup Guide */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <Monitor className="w-4 h-4 text-teal-400" />
+            <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+              Operating System & Platform Architecture:
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {(['windows', 'macos', 'linux'] as OperatingSystem[]).map((osKey) => (
+              <button
+                key={osKey}
+                type="button"
+                onClick={() => {
+                  onChange({ ...config, targetOS: osKey });
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
+                  config.targetOS === osKey
+                    ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30 border border-teal-400'
+                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                {osKey === 'windows' && <Monitor className="w-3.5 h-3.5" />}
+                {osKey === 'macos' && <Laptop className="w-3.5 h-3.5" />}
+                {osKey === 'linux' && <Terminal className="w-3.5 h-3.5" />}
+                <span>{getOSLabel(osKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Selected OS Details & CORS Quick Launch */}
+        {config.targetOS && OS_GUIDES[config.targetOS] && (
+          <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 text-slate-300 font-medium">
+                <span className="text-teal-400 font-mono font-bold">[{OS_GUIDES[config.targetOS].badge}]</span>
+                <span>Ollama CORS Terminal Launch Command:</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(OS_GUIDES[config.targetOS].corsCommand);
+                  setCopiedCommand(true);
+                  setTimeout(() => setCopiedCommand(false), 2000);
+                }}
+                className="flex items-center gap-1 text-[11px] font-mono px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 transition"
+              >
+                <Clipboard className="w-3 h-3 text-teal-400" />
+                {copiedCommand ? 'Copied!' : 'Copy Command'}
+              </button>
+            </div>
+            
+            <div className="bg-black/60 p-2.5 rounded-lg font-mono text-emerald-400 text-[11px] border border-slate-800 mb-2 overflow-x-auto select-all">
+              {OS_GUIDES[config.targetOS].corsCommand}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-400 font-sans">
+              <div className="flex items-start gap-1.5">
+                <Folder className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+                <span><strong>Models Path:</strong> <code className="font-mono text-slate-300">{OS_GUIDES[config.targetOS].modelsPath}</code></span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span>{OS_GUIDES[config.targetOS].systemTrayTip}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Preset Selector */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
         <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-2.5">
-          Quick Configuration Presets:
+          Hardware & Persona Presets:
         </span>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
           <button
             type="button"
-            onClick={() => applyPreset('low_vram_mac')}
+            onClick={() => applyPreset('eco_laptop')}
             className={`p-3 rounded-xl border text-left transition-all ${
-              activePreset === 'low_vram_mac' || config.lowVramMode
+              activePreset === 'eco_laptop' || config.lowVramMode
                 ? 'bg-amber-950/60 border-amber-500 text-amber-200 shadow-md' 
                 : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
             }`}
           >
             <div className="flex items-center gap-1.5 font-semibold text-xs text-amber-400 mb-1">
-              <Zap className="w-3.5 h-3.5" /> 2016 Mac Mode
+              <Zap className="w-3.5 h-3.5" /> Eco / Low-RAM Mode
             </div>
-            <p className="text-[11px] text-slate-400">2048 ctx, 0s keep_alive, 2 turns history.</p>
+            <p className="text-[11px] text-slate-400">2048 ctx, 0s keep_alive, 2 turns. Best for laptops on Windows, Mac, Linux.</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => applyPreset('balanced_pc')}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              activePreset === 'balanced_pc' && !config.lowVramMode
+                ? 'bg-sky-950/60 border-sky-500 text-white shadow-md' 
+                : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 font-semibold text-xs text-sky-400 mb-1">
+              <Monitor className="w-3.5 h-3.5" /> Balanced PC / Mac
+            </div>
+            <p className="text-[11px] text-slate-400">4096 ctx, 5m keep_alive, 4 turns. Fast response & warm model cache.</p>
           </button>
 
           <button
@@ -243,11 +360,11 @@ export default function OllamaConfig({
             onClick={() => applyPreset('voice_assistant')}
             className={`p-3 rounded-xl border text-left transition-all ${
               activePreset === 'voice_assistant' 
-                ? 'bg-sky-950/60 border-sky-500 text-white shadow-md' 
+                ? 'bg-emerald-950/60 border-emerald-500 text-white shadow-md' 
                 : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
             }`}
           >
-            <div className="flex items-center gap-1.5 font-semibold text-xs text-sky-400 mb-1">
+            <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-400 mb-1">
               <Mic className="w-3.5 h-3.5" /> Voice Companion
             </div>
             <p className="text-[11px] text-slate-400">Concise, 2-sentence conversational outputs.</p>
@@ -258,11 +375,11 @@ export default function OllamaConfig({
             onClick={() => applyPreset('code_architect')}
             className={`p-3 rounded-xl border text-left transition-all ${
               activePreset === 'code_architect' 
-                ? 'bg-emerald-950/60 border-emerald-500 text-white shadow-md' 
+                ? 'bg-indigo-950/60 border-indigo-500 text-white shadow-md' 
                 : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
             }`}
           >
-            <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-400 mb-1">
+            <div className="flex items-center gap-1.5 font-semibold text-xs text-indigo-400 mb-1">
               <Code className="w-3.5 h-3.5" /> Code & Logic
             </div>
             <p className="text-[11px] text-slate-400">Deterministic temp (0.2), typed docs & markdown.</p>
@@ -273,29 +390,14 @@ export default function OllamaConfig({
             onClick={() => applyPreset('analytical_report')}
             className={`p-3 rounded-xl border text-left transition-all ${
               activePreset === 'analytical_report' 
-                ? 'bg-indigo-950/60 border-indigo-500 text-white shadow-md' 
+                ? 'bg-purple-950/60 border-purple-500 text-white shadow-md' 
                 : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
             }`}
           >
-            <div className="flex items-center gap-1.5 font-semibold text-xs text-indigo-400 mb-1">
+            <div className="flex items-center gap-1.5 font-semibold text-xs text-purple-400 mb-1">
               <BookOpen className="w-3.5 h-3.5" /> Deep Analysis
             </div>
             <p className="text-[11px] text-slate-400">Structured sections, comparison tables, metrics.</p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => applyPreset('creative_divergent')}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              activePreset === 'creative_divergent' 
-                ? 'bg-orange-950/60 border-orange-500 text-white shadow-md' 
-                : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
-            }`}
-          >
-            <div className="flex items-center gap-1.5 font-semibold text-xs text-orange-400 mb-1">
-              <Flame className="w-3.5 h-3.5" /> Creative & Ideas
-            </div>
-            <p className="text-[11px] text-slate-400">High temp (1.0), exploratory vocabulary pool.</p>
           </button>
         </div>
       </div>
@@ -306,23 +408,23 @@ export default function OllamaConfig({
         {/* Left Column: Memory & Context Engines + Ollama Service */}
         <div className="space-y-6">
 
-          {/* VRAM & MEMORY PROFILE (2016 MacBook Fix) */}
+          {/* VRAM & MEMORY PROFILE */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-semibold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-amber-400" /> VRAM & Memory Footprint Engine
+                <HardDrive className="w-4 h-4 text-amber-400" /> Resource & Memory Footprint Engine
               </h3>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/80 text-amber-300">
-                2016 Mac Fix
+                Cross-Platform Optimizer
               </span>
             </div>
 
             {/* Low VRAM Toggle */}
             <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-3">
               <div>
-                <span className="text-xs font-bold text-white block">Low-VRAM Optimization Profile</span>
+                <span className="text-xs font-bold text-white block">Eco / Low-RAM Profile</span>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Limits context window to 2048 and sets <code className="text-sky-300 font-mono">keep_alive: 0s</code> to unload the model immediately after responding.
+                  Protects laptop battery & system memory across Windows, macOS, and Linux. Caps context window to 2048 tokens and sets <code className="text-sky-300 font-mono">keep_alive: 0s</code> to unload model immediately.
                 </p>
               </div>
               <button
@@ -356,11 +458,11 @@ export default function OllamaConfig({
                 onChange={handleTextChange}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-sky-500"
               >
-                <option value="0s">0s — Unload immediately (Zero VRAM idle - Best for 2016 Mac)</option>
+                <option value="0s">0s — Unload immediately (Zero idle RAM/VRAM - Best for laptops & battery)</option>
                 <option value="1m">1m — Unload after 1 minute of inactivity</option>
                 <option value="5m">5m — Standard (Keep in VRAM for 5 minutes)</option>
                 <option value="15m">15m — Keep loaded for 15 minutes</option>
-                <option value="-1">-1 — Keep in VRAM indefinitely (High memory)</option>
+                <option value="-1">-1 — Keep in VRAM indefinitely (High memory / Desktop GPUs)</option>
               </select>
             </div>
 

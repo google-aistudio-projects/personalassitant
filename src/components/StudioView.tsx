@@ -34,7 +34,9 @@ import {
   Sliders,
   Share2,
   MessageSquare,
-  Cpu
+  Cpu,
+  Bird,
+  Feather
 } from 'lucide-react';
 
 interface StudioViewProps {
@@ -311,63 +313,27 @@ export default function StudioView({
       {/* Studio Banner & Mode Controls */}
       <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
-            <Sparkles className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-teal-500/20">
+            <Bird className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-white font-semibold text-base sm:text-lg">Arun's Personal Assistant Studio</h2>
-              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase">
+              <h2 className="text-white font-semibold text-base sm:text-lg flex items-center gap-2">
+                Peacock Studio
+              </h2>
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1">
+                <Feather className="w-2.5 h-2.5" />
                 {config.model}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Built using Llama & Gemini AI Studio • Request sending & structured Markdown response aggregation.
+              Personal Assistant built using Llama and Gemini AI Studio • Request sending & structured Markdown response aggregation.
             </p>
           </div>
         </div>
 
         {/* Quick Actions & Status */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Low VRAM / 2016 MacBook Profile Button */}
-          {onToggleLowVramMode && (
-            <button
-              onClick={() => onToggleLowVramMode()}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono border transition-all ${
-                config.lowVramMode 
-                  ? 'bg-amber-950/60 border-amber-600/70 text-amber-300 shadow-sm' 
-                  : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'
-              }`}
-              title="Toggle Low-VRAM mode (limits ctx to 2048 and sets keep_alive to 0s to save MacBook GPU/RAM)"
-            >
-              <Zap className={`w-3.5 h-3.5 ${config.lowVramMode ? 'text-amber-400 fill-amber-400/20' : 'text-slate-400'}`} />
-              <span>2016 Mac Mode: <strong>{config.lowVramMode ? 'ON' : 'OFF'}</strong></span>
-            </button>
-          )}
-
-          {/* VRAM Purge Quick Action */}
-          {onPurgeVram && (
-            <button
-              onClick={onPurgeVram}
-              disabled={isPurgingVram}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono border transition-all ${
-                purgeSuccess 
-                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300' 
-                  : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700'
-              }`}
-              title="Explicitly unload model from VRAM/RAM to free up laptop memory"
-            >
-              {isPurgingVram ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
-              ) : purgeSuccess ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              )}
-              <span>{isPurgingVram ? 'Purging...' : purgeSuccess ? 'VRAM Cleared' : 'Purge VRAM'}</span>
-            </button>
-          )}
-
           {/* Hands-free Voice Toggle */}
           <button
             onClick={isListening ? onStopListening : onStartListening}

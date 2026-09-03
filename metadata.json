@@ -1,6 +1,6 @@
 {
-  "name": "Arun's Personal Assistant",
-  "description": "Arun's Personal Assistant - Built using Llama and Google AI Studio with local voice orchestration, markdown formatting, and document exports.",
+  "name": "Peacock",
+  "description": "Peacock - Personal Assistant built using Llama and Gemini AI Studio",
   "requestFramePermissions": [
     "microphone"
   ],

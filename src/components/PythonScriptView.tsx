@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { VoiceConfig } from '../types';
-import { FileCode, Clipboard, Check, Download, AlertTriangle, BookOpen } from 'lucide-react';
+import { FileCode, Clipboard, Check, Download, AlertTriangle, BookOpen, Terminal, Monitor, Laptop } from 'lucide-react';
+import { OS_GUIDES, getOSLabel } from '../utils/platform';
 
 interface PythonScriptViewProps {
   config: VoiceConfig;
@@ -15,8 +16,8 @@ export default function PythonScriptView({ config }: PythonScriptViewProps) {
     
     return `#!/usr/bin/env python3
 """
-Arun's Personal Assistant - Local Hands-Free Voice Assistant
-Built using Llama & Gemini AI Studio (${new Date().toLocaleDateString()})
+Peacock - Personal Assistant built using Llama and Gemini AI Studio
+Local Hands-Free Voice Assistant (${new Date().toLocaleDateString()})
 """
 
 import os
@@ -222,29 +223,40 @@ if __name__ == "__main__":
           </div>
         </div>
 
-        {/* Requirements & Info */}
-        <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800/80">
-          <div>
-            <span className="flex items-center gap-1 text-[11px] font-mono text-indigo-400 mb-1.5 uppercase tracking-wider font-semibold">
-              <BookOpen className="w-3.5 h-3.5" /> Prerequisites Setup
-            </span>
-            <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
-              Install the required packages locally before executing the script on your terminal:
-            </p>
-            <div className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-slate-300 border border-slate-800 select-all">
-              pip install SpeechRecognition pyttsx3 requests pyaudio
+        {/* Requirements & Info Tailored to Target OS */}
+        {(() => {
+          const currentOS = config.targetOS || 'windows';
+          const guide = OS_GUIDES[currentOS] || OS_GUIDES.windows;
+          return (
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800/80">
+              <div>
+                <span className="flex items-center gap-1 text-[11px] font-mono text-indigo-400 mb-1.5 uppercase tracking-wider font-semibold">
+                  <BookOpen className="w-3.5 h-3.5" /> {getOSLabel(currentOS)} Prerequisites
+                </span>
+                <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
+                  Recommended environment setup for <strong>{getOSLabel(currentOS)}</strong>:
+                </p>
+                <div className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-emerald-400 border border-slate-800 select-all mb-1.5">
+                  {guide.pythonVenvCommand} && {guide.pythonActivateCommand}
+                </div>
+                <div className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-slate-300 border border-slate-800 select-all">
+                  pip install SpeechRecognition pyttsx3 requests pyaudio
+                </div>
+              </div>
+              <div>
+                <span className="flex items-center gap-1 text-[11px] font-mono text-amber-400 mb-1.5 uppercase tracking-wider font-semibold">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> {getOSLabel(currentOS)} PyAudio Setup
+                </span>
+                <p className="text-[11px] text-slate-400 leading-relaxed mb-1.5">
+                  {guide.audioPackageTip}
+                </p>
+                <p className="text-[10px] text-slate-500 italic">
+                  💡 {guide.systemTrayTip}
+                </p>
+              </div>
             </div>
-          </div>
-          <div>
-            <span className="flex items-center gap-1 text-[11px] font-mono text-indigo-400 mb-1.5 uppercase tracking-wider font-semibold">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Mac / Windows Notes
-            </span>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              <strong>PyAudio note:</strong> If you get errors installing PyAudio on macOS, install portaudio first using 
-              <code className="text-indigo-300 font-mono text-[10px] bg-indigo-950/40 px-1 rounded mx-1">brew install portaudio</code>, or on Windows use pipwin or precompiled wheel files.
-            </p>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Code viewer container */}
         <div className="relative">

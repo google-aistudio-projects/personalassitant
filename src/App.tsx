@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { VoiceConfig, TerminalLog, OllamaModel, MetricsRun, ResponseMetrics, ChatMessage } from './types';
+import { VoiceConfig, TerminalLog, OllamaModel, MetricsRun, ResponseMetrics, ChatMessage, OperatingSystem } from './types';
+import { detectOS, getOSLabel } from './utils/platform';
 import StudioView from './components/StudioView';
 import OllamaConfig from './components/OllamaConfig';
 import MetricsDashboard from './components/MetricsDashboard';
 import PythonScriptView from './components/PythonScriptView';
 import VoiceTerminal from './components/VoiceTerminal';
+import HardwareMonitor from './components/HardwareMonitor';
 import { 
   Volume2, 
   Sparkles, 
@@ -24,7 +26,12 @@ import {
   ChevronRight,
   ExternalLink,
   Trash2,
-  Zap
+  Zap,
+  Bird,
+  Feather,
+  Monitor,
+  Laptop,
+  Gauge
 } from 'lucide-react';
 
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -83,27 +90,28 @@ export default function App() {
     ollamaUrl: 'http://localhost:11434',
     model: 'llama3.2',
     wakeWord: 'computer',
-    systemPrompt: "You are Arun's highly efficient, hands-free personal voice assistant. Respond with clear, structured Markdown.",
+    systemPrompt: "You are Peacock, a highly efficient personal assistant built using Llama and Gemini AI Studio. Respond with clear, structured Markdown.",
     voiceName: 'default',
     voiceRate: 1.0,
     voicePitch: 1.0,
     voiceVolume: 1.0,
     continuousListening: true,
-    // Context & Memory Optimization (Ideal for 2016 MacBooks & low-RAM laptops)
+    // Context & Memory Optimization (Calibrated for Windows 11/10 with 32GB RAM & i7)
     enableSessionContext: true,
-    maxContextTurns: 2, // 2 previous turns prevents VRAM explosion while giving full continuity
-    keepAlive: '0s', // '0s' unloads model from VRAM immediately after generation
-    lowVramMode: true,
+    maxContextTurns: 4,
+    keepAlive: '5m',
+    lowVramMode: false,
+    targetOS: 'windows',
     // Hyperparameters
     temperature: 0.7,
     topP: 0.9,
     topK: 40,
-    numCtx: 2048, // 2048 context is super lightweight on 2016 Mac
+    numCtx: 4096,
     repeatPenalty: 1.1
   });
 
-  // Navigation: studio (default), config (Voice Setup), dashboard (Workbench), python (Python Script), logs (Live Terminal)
-  const [activeTab, setActiveTab] = useState<'studio' | 'config' | 'dashboard' | 'python' | 'logs'>('studio');
+  // Navigation: studio (default), config (Voice Setup), dashboard (Workbench), python (Python Script), logs (Live Terminal), monitoring (Hardware)
+  const [activeTab, setActiveTab] = useState<'studio' | 'config' | 'dashboard' | 'python' | 'logs' | 'monitoring'>('studio');
   const [status, setStatus] = useState<'idle' | 'listening_wake' | 'recording_command' | 'processing' | 'speaking' | 'disabled'>(
     SpeechRecognition ? 'idle' : 'disabled'
   );
@@ -502,6 +510,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
 
   const handleToggleLowVramMode = (enable?: boolean) => {
     const target = enable !== undefined ? enable : !config.lowVramMode;
+    const osName = getOSLabel(config.targetOS);
     if (target) {
       setConfig(prev => ({
         ...prev,
@@ -510,7 +519,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
         maxContextTurns: 2,
         keepAlive: '0s'
       }));
-      addLog('system', '⚡ 2016 Mac Low-VRAM Profile ACTIVATED (Context: 2048, 2 turns history, keep_alive: 0s instant memory unload).');
+      addLog('system', `⚡ Eco / Low-RAM Profile ACTIVATED for ${osName} (Context: 2048, 2 turns history, keep_alive: 0s instant memory release).`);
     } else {
       setConfig(prev => ({
         ...prev,
@@ -519,7 +528,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
         maxContextTurns: 5,
         keepAlive: '5m'
       }));
-      addLog('system', 'Standard Memory Profile restored (Context: 4096, 5 turns history, keep_alive: 5m).');
+      addLog('system', `Standard Memory Profile restored for ${osName} (Context: 4096, 5 turns history, keep_alive: 5m).`);
     }
   };
 
@@ -697,16 +706,24 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
           
           {/* Logo & Identity */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
-              <Volume2 className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-teal-500/20 text-white relative">
+              <Bird className="w-5 h-5 text-white" />
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400"></span>
+              </span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-sans font-bold text-base tracking-tight text-white">Arun's Personal Assistant</h1>
-                <span className="text-[10px] bg-sky-950 text-sky-400 font-mono font-bold px-1.5 py-0.5 rounded border border-sky-800/50">Studio Edition</span>
+                <h1 className="font-sans font-bold text-base tracking-tight text-white flex items-center gap-1.5">
+                  Peacock
+                </h1>
+                <span className="text-[10px] bg-teal-950/80 text-teal-300 font-mono font-bold px-1.5 py-0.5 rounded border border-teal-800/60 flex items-center gap-1">
+                  <Feather className="w-2.5 h-2.5 text-teal-400" /> AI
+                </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Built using <span className="text-slate-300 font-medium">Llama</span> & <span className="text-sky-300 font-medium">Gemini AI Studio</span>
+                Personal Assistant built using <span className="text-slate-300 font-medium">Llama</span> and <span className="text-sky-300 font-medium">Gemini AI Studio</span>
               </p>
             </div>
           </div>
@@ -763,50 +780,65 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
             >
               <TerminalIcon className="w-3.5 h-3.5 text-slate-300" /> Terminal
             </button>
+            <button
+              onClick={() => setActiveTab('monitoring')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
+                activeTab === 'monitoring' 
+                  ? 'bg-gradient-to-r from-teal-500 to-emerald-600 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Gauge className="w-3.5 h-3.5 text-teal-400" /> Monitoring
+            </button>
           </nav>
 
-          {/* Model Status & Memory Controls */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Low-VRAM 2016 MacBook Preset Toggle */}
-            <button
-              onClick={() => handleToggleLowVramMode()}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-mono transition-all ${
-                config.lowVramMode 
-                  ? 'bg-amber-950/60 border-amber-600/60 text-amber-300 shadow-sm' 
-                  : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
-              }`}
-              title="Toggle 2016 MacBook / Low-RAM Mode (2048 ctx, 2 turns history, 0s keep_alive)"
-            >
-              <Zap className={`w-3.5 h-3.5 ${config.lowVramMode ? 'text-amber-400 fill-amber-400/20' : 'text-slate-500'}`} />
-              <span className="hidden sm:inline">2016 Mac Mode:</span>
-              <span className="font-bold">{config.lowVramMode ? 'ON' : 'OFF'}</span>
-            </button>
+          {/* Top Menus: OS Platform Dropdown, Purge VRAM Action, & Target Model */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Menu 1: Windows / Mac / Linux OS Dropdown Menu */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 rounded-xl text-xs font-mono text-slate-300 shadow-sm transition-all">
+              <Monitor className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+              <span className="text-[11px] text-slate-400 font-sans hidden sm:inline">OS:</span>
+              <select
+                value={config.targetOS}
+                onChange={(e) => {
+                  const newOS = e.target.value as OperatingSystem;
+                  setConfig(prev => ({ ...prev, targetOS: newOS }));
+                  addLog('system', `OS Platform set to ${getOSLabel(newOS)}.`);
+                }}
+                className="bg-transparent text-white font-bold outline-none cursor-pointer text-xs pr-1"
+                title="Active Operating System (Windows / macOS / Linux)"
+              >
+                <option value="windows" className="bg-slate-900 text-white">Windows (PC/Laptop)</option>
+                <option value="macos" className="bg-slate-900 text-white">macOS (Apple Silicon/Intel)</option>
+                <option value="linux" className="bg-slate-900 text-white">Linux (x86_64)</option>
+              </select>
+            </div>
 
-            {/* Manual VRAM Eviction / Purge Button */}
+            {/* Menu 2: Purge VRAM Menu Action */}
             <button
               onClick={handlePurgeVram}
               disabled={isPurgingVram}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border font-mono transition-all ${
+              className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-xl border font-mono font-semibold transition-all shadow-sm ${
                 purgeSuccess 
-                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300' 
-                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'
+                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-emerald-500/10' 
+                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-slate-700/80 hover:border-slate-600'
               }`}
-              title="Explicitly evict model from GPU VRAM / CPU RAM"
+              title="Purge VRAM: Evict active model from GPU/RAM memory to free system resources"
             >
               {isPurgingVram ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
               ) : purgeSuccess ? (
-                <span className="text-emerald-400 font-bold text-[11px]">✓ Evicted</span>
+                <span className="text-emerald-400 font-bold text-[11px]">✓ Purged</span>
               ) : (
                 <Trash2 className="w-3.5 h-3.5 text-rose-400" />
               )}
-              <span className="hidden md:inline">{isPurgingVram ? 'Purging...' : purgeSuccess ? 'VRAM Cleared' : 'Purge VRAM'}</span>
+              <span>{isPurgingVram ? 'Purging...' : purgeSuccess ? 'VRAM Cleared' : 'Purge VRAM'}</span>
             </button>
 
             {/* Model Status Badge Shortcut */}
             <button
               onClick={() => setActiveTab('config')}
-              className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/90 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 font-mono transition-all group"
+              className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/90 hover:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700/80 hover:border-slate-600 font-mono transition-all group"
               title="Click to configure active Ollama model"
             >
               <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : connectionStatus === 'failed' ? 'bg-rose-400' : 'bg-amber-400'}`} />
@@ -891,6 +923,16 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
           ) : activeTab === 'python' ? (
             /* PYTHON SCRIPT: Standalone synchronized client generator */
             <PythonScriptView config={config} />
+          ) : activeTab === 'monitoring' ? (
+            /* MONITORING: Live CPU, VRAM, and 32GB RAM hardware workload meters with Green, Yellow, Red alerts */
+            <HardwareMonitor
+              config={config}
+              isProcessing={status === 'processing'}
+              onPurgeVram={handlePurgeVram}
+              isPurgingVram={isPurgingVram}
+              purgeSuccess={purgeSuccess}
+              onToggleLowVramMode={handleToggleLowVramMode}
+            />
           ) : (
             /* TERMINAL LOGS: Raw interactive terminal view */
             <div className="max-w-4xl mx-auto space-y-4">
@@ -922,7 +964,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500 flex flex-wrap items-center justify-between max-w-7xl mx-auto w-full">
-        <span>Arun's Personal Assistant • Built using Llama & Gemini AI Studio</span>
+        <span>Peacock • Personal Assistant built using Llama and Gemini AI Studio • <span className="text-teal-400 font-mono font-medium">{getOSLabel(config.targetOS)} Optimized</span></span>
         <div className="flex items-center gap-4 text-[11px] font-mono">
           <span>Ollama Port: 11434</span>
           <span>•</span>

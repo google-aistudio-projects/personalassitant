@@ -6,6 +6,8 @@ export interface ChatMessage {
   tokens?: number;
 }
 
+export type OperatingSystem = 'macos' | 'windows' | 'linux' | 'unknown';
+
 export interface VoiceConfig {
   ollamaUrl: string;
   model: string;
@@ -16,11 +18,12 @@ export interface VoiceConfig {
   voicePitch: number;
   voiceVolume: number;
   continuousListening: boolean;
-  // Sessionalful Context & Memory Control (2016 Mac optimizations)
+  // Sessional Context & Memory Control (Cross-Platform / Low-RAM optimizations)
   enableSessionContext: boolean;
   maxContextTurns: number;
   keepAlive: string; // '0s' (unload immediately), '1m', '5m', '10m', '-1' (indefinite)
-  lowVramMode: boolean;
+  lowVramMode: boolean; // Eco / Low-RAM mode (fits low VRAM laptops on Windows, Mac, Linux)
+  targetOS: OperatingSystem;
   // Finer LLM parameters
   temperature: number;
   topP: number;
