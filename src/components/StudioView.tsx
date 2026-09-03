@@ -92,6 +92,7 @@ export default function StudioView({
   const [showWaveform, setShowWaveform] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const printContainerRef = useRef<HTMLDivElement>(null);
+  const outputOnlyRef = useRef<HTMLDivElement>(null);
 
   // Active run to display (latest or selected from history)
   const activeRun = selectedRunId 
@@ -239,70 +240,241 @@ export default function StudioView({
     URL.revokeObjectURL(url);
   };
 
-  // Trigger Print / PDF export dialog
+  // Trigger Print / PDF export dialog - EXPORTS OUTPUT ONLY (No input prompts)
   const handlePrintPDF = () => {
     if (!activeRun) return;
     
-    // Create print iframe or trigger window.print with dedicated printable class
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    // Extract rendered output HTML directly (excluding any prompt headers or interactive buttons)
+    let outputHtml = '';
+    if (outputOnlyRef.current) {
+      const clone = outputOnlyRef.current.cloneNode(true) as HTMLElement;
+      // Strip out interactive buttons like "Copy Code"
+      clone.querySelectorAll('button').forEach(btn => btn.remove());
+      // Strip out any elements with select-none utility class
+      clone.querySelectorAll('.select-none').forEach(el => el.remove());
+      outputHtml = clone.innerHTML;
+    } else {
+      // Clean fallback if rendered DOM node is unavailable
+      outputHtml = `<div style="white-space: pre-wrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.65;">${activeRun.response.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+    }
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Ollama Document - ${activeRun.prompt.slice(0, 30)}</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              padding: 40px;
-              color: #111827;
-              line-height: 1.6;
-              max-width: 800px;
-              margin: 0 auto;
+    const docFileName = `Ollama_Output_${activeRun.model.replace(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>${docFileName}</title>
+    <style>
+      @page {
+        margin: 18mm 15mm 18mm 15mm;
+        size: auto;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        padding: 30px 40px;
+        color: #0f172a;
+        background-color: #ffffff;
+        line-height: 1.65;
+        max-width: 860px;
+        margin: 0 auto;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      /* Clean metadata bar: ONLY model name & generation info, ZERO input prompt */
+      .doc-meta-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 12px;
+        margin-bottom: 24px;
+        border-bottom: 2px solid #e2e8f0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 11px;
+        color: #64748b;
+      }
+      .doc-meta-bar strong {
+        color: #0284c7;
+        font-weight: 600;
+      }
+      /* Output document styling */
+      .output-content {
+        font-size: 14px;
+        color: #0f172a;
+      }
+      .output-content h1, .output-content h2, .output-content h3, .output-content h4 {
+        color: #0f172a !important;
+        font-weight: 700;
+        margin-top: 24px;
+        margin-bottom: 10px;
+        line-height: 1.3;
+      }
+      .output-content h1 {
+        font-size: 20px;
+        border-bottom: 1px solid #cbd5e1;
+        padding-bottom: 8px;
+      }
+      .output-content h2 {
+        font-size: 17px;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 4px;
+      }
+      .output-content h3 {
+        font-size: 15px;
+      }
+      .output-content p {
+        margin: 10px 0 14px 0;
+        color: #1e293b !important;
+        line-height: 1.65;
+      }
+      .output-content ul, .output-content ol {
+        margin: 10px 0 14px 0;
+        padding-left: 24px;
+        color: #1e293b !important;
+      }
+      .output-content li {
+        margin: 4px 0;
+        color: #1e293b !important;
+      }
+      .output-content blockquote {
+        border-left: 4px solid #0284c7 !important;
+        background: #f8fafc !important;
+        color: #334155 !important;
+        margin: 16px 0;
+        padding: 10px 16px;
+        border-radius: 0 8px 8px 0;
+        font-style: italic;
+      }
+      .output-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+      .output-content th, .output-content td {
+        border: 1px solid #cbd5e1 !important;
+        padding: 8px 12px;
+        text-align: left;
+        color: #0f172a !important;
+      }
+      .output-content th {
+        background-color: #f1f5f9 !important;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+      }
+      .output-content pre {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 16px 0;
+        overflow-x: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #0f172a !important;
+        white-space: pre-wrap;
+      }
+      .output-content code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        padding: 2px 5px;
+        border-radius: 4px;
+        border: 1px solid #e2e8f0;
+      }
+      .output-content pre code {
+        background: transparent !important;
+        border: none !important;
+        padding: 0;
+      }
+      .output-content strong {
+        color: #0f172a !important;
+        font-weight: 600;
+      }
+      /* Clean normalization for dark theme classes captured from DOM */
+      .bg-slate-950, .bg-slate-900, .bg-slate-800, .bg-indigo-950\\/20 {
+        background: #f8fafc !important;
+        border-color: #cbd5e1 !important;
+        color: #0f172a !important;
+      }
+      .text-white, .text-slate-200, .text-slate-300, .text-slate-400 {
+        color: #0f172a !important;
+      }
+      .text-sky-300, .text-sky-400, .text-indigo-300, .text-indigo-400 {
+        color: #0369a1 !important;
+      }
+      .text-emerald-300, .text-emerald-400 {
+        color: #047857 !important;
+      }
+      .border-slate-800, .border-slate-700 {
+        border-color: #cbd5e1 !important;
+      }
+      button, .no-print {
+        display: none !important;
+      }
+      @media print {
+        body {
+          padding: 0;
+          max-width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="doc-meta-bar">
+      <span>Model Output: <strong>${activeRun.model}</strong></span>
+      <span>${activeRun.timestamp} • ${activeRun.totalTokens} tokens (${activeRun.tokensPerSec.toFixed(1)} t/s)</span>
+    </div>
+    <div class="output-content">
+      ${outputHtml}
+    </div>
+    <script>
+      window.onload = function() {
+        window.print();
+        setTimeout(function() { window.close(); }, 500);
+      };
+    </script>
+  </body>
+</html>`;
+
+    // Attempt popup window print first
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    } else {
+      // Fallback for iframe environments or strict popup blockers
+      const printIframe = document.createElement('iframe');
+      printIframe.style.position = 'fixed';
+      printIframe.style.right = '0';
+      printIframe.style.bottom = '0';
+      printIframe.style.width = '0';
+      printIframe.style.height = '0';
+      printIframe.style.border = '0';
+      document.body.appendChild(printIframe);
+      const doc = printIframe.contentWindow?.document || printIframe.contentDocument;
+      if (doc) {
+        doc.write(htmlContent);
+        doc.close();
+        setTimeout(() => {
+          printIframe.contentWindow?.focus();
+          printIframe.contentWindow?.print();
+          setTimeout(() => {
+            if (document.body.contains(printIframe)) {
+              document.body.removeChild(printIframe);
             }
-            .meta {
-              border-bottom: 2px solid #e5e7eb;
-              padding-bottom: 16px;
-              margin-bottom: 24px;
-            }
-            .meta h2 { margin: 0 0 8px 0; font-size: 18px; color: #4338ca; }
-            .meta p { margin: 0 0 12px 0; font-size: 14px; font-style: italic; color: #374151; }
-            .badge-row { display: flex; gap: 16px; font-size: 12px; color: #6b7280; font-family: monospace; }
-            .content { font-size: 14px; }
-            pre { background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; border: 1px solid #e5e7eb; }
-            code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-            table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
-            th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
-            th { background-color: #f9fafb; }
-            blockquote { border-left: 4px solid #cbd5e1; margin: 16px 0; padding-left: 16px; color: #475569; font-style: italic; }
-            h1, h2, h3, h4 { color: #0f172a; margin-top: 24px; margin-bottom: 12px; }
-          </style>
-        </head>
-        <body>
-          <div class="meta">
-            <h2>Query Prompt</h2>
-            <p>"${activeRun.prompt.replace(/"/g, '&quot;')}"</p>
-            <div class="badge-row">
-              <span>Model: ${activeRun.model}</span>
-              <span>Tokens: ${activeRun.totalTokens}</span>
-              <span>Speed: ${activeRun.tokensPerSec.toFixed(1)} t/s</span>
-              <span>Generated: ${activeRun.timestamp}</span>
-            </div>
-          </div>
-          <div class="content">
-            <pre style="white-space: pre-wrap;">${activeRun.response.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+          }, 1000);
+        }, 300);
+      }
+    }
   };
 
   const wordCount = promptText.trim() ? promptText.trim().split(/\s+/).length : 0;
@@ -771,7 +943,7 @@ export default function StudioView({
                     onClick={handlePrintPDF}
                     disabled={!activeRun?.response}
                     className="flex items-center gap-1 px-2.5 py-1 text-xs bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 border border-sky-700/50 rounded-lg font-mono transition-all disabled:opacity-30"
-                    title="Print document or Export to PDF"
+                    title="Print or Export to PDF (Output only - excludes input prompt)"
                   >
                     <Printer className="w-3.5 h-3.5" /> PDF / Print
                   </button>
@@ -814,7 +986,7 @@ export default function StudioView({
                   </div>
 
                   {/* Markdown Renderer with Custom Styled Tags */}
-                  <div className="prose prose-invert max-w-none text-slate-200 text-sm leading-relaxed space-y-3 font-sans">
+                  <div ref={outputOnlyRef} id="studio-rendered-output" className="prose prose-invert max-w-none text-slate-200 text-sm leading-relaxed space-y-3 font-sans">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -922,7 +1094,7 @@ export default function StudioView({
                   <span>|</span>
                   <button onClick={handleExportHTML} className="hover:text-indigo-400 underline transition-colors">HTML</button>
                   <span>|</span>
-                  <button onClick={handlePrintPDF} className="hover:text-sky-400 underline transition-colors">PDF Document</button>
+                  <button onClick={handlePrintPDF} className="hover:text-sky-400 underline transition-colors" title="Export Output to PDF">PDF (Output Only)</button>
                 </div>
               </div>
             )}
