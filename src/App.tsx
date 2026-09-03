@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { VoiceConfig, TerminalLog, OllamaModel, MetricsRun, ResponseMetrics, ChatMessage, OperatingSystem } from './types';
 import { detectOS, getOSLabel } from './utils/platform';
 import StudioView from './components/StudioView';
-import OllamaConfig from './components/OllamaConfig';
+import ModelsView from './components/ModelsView';
+import VoiceSetupView from './components/VoiceSetupView';
 import MetricsDashboard from './components/MetricsDashboard';
 import PythonScriptView from './components/PythonScriptView';
 import VoiceTerminal from './components/VoiceTerminal';
@@ -110,8 +111,8 @@ export default function App() {
     repeatPenalty: 1.1
   });
 
-  // Navigation: studio (default), config (Voice Setup), dashboard (Workbench), python (Python Script), logs (Live Terminal), monitoring (Hardware)
-  const [activeTab, setActiveTab] = useState<'studio' | 'config' | 'dashboard' | 'python' | 'logs' | 'monitoring'>('studio');
+  // Navigation: studio (default), models (Ollama Model Manager), voice (Pure Voice Setup), monitoring (Hardware), dashboard (Workbench), python (Python Script), logs (Live Terminal)
+  const [activeTab, setActiveTab] = useState<'studio' | 'models' | 'voice' | 'config' | 'monitoring' | 'dashboard' | 'python' | 'logs'>('studio');
   const [status, setStatus] = useState<'idle' | 'listening_wake' | 'recording_command' | 'processing' | 'speaking' | 'disabled'>(
     SpeechRecognition ? 'idle' : 'disabled'
   );
@@ -741,44 +742,24 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
               <Sparkles className="w-3.5 h-3.5" /> Studio
             </button>
             <button
-              onClick={() => setActiveTab('config')}
+              onClick={() => setActiveTab('models')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-                activeTab === 'config' 
-                  ? 'bg-slate-800 text-white shadow-md' 
+                activeTab === 'models' 
+                  ? 'bg-sky-600 text-white shadow-md' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <Sliders className="w-3.5 h-3.5 text-orange-400" /> Voice Setup
+              <Cpu className="w-3.5 h-3.5 text-sky-400" /> Models
             </button>
             <button
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => setActiveTab('voice')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-                activeTab === 'dashboard' 
-                  ? 'bg-slate-800 text-white shadow-md' 
+                activeTab === 'voice' || activeTab === 'config'
+                  ? 'bg-emerald-600 text-white shadow-md' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <Activity className="w-3.5 h-3.5 text-emerald-400" /> Workbench
-            </button>
-            <button
-              onClick={() => setActiveTab('python')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-                activeTab === 'python' 
-                  ? 'bg-slate-800 text-white shadow-md' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              <FileCode className="w-3.5 h-3.5 text-indigo-400" /> Python Script
-            </button>
-            <button
-              onClick={() => setActiveTab('logs')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-                activeTab === 'logs' 
-                  ? 'bg-slate-800 text-white shadow-md' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              <TerminalIcon className="w-3.5 h-3.5 text-slate-300" /> Terminal
+              <Sliders className="w-3.5 h-3.5 text-emerald-400" /> Voice Setup
             </button>
             <button
               onClick={() => setActiveTab('monitoring')}
@@ -790,60 +771,97 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
             >
               <Gauge className="w-3.5 h-3.5 text-teal-400" /> Monitoring
             </button>
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
+                activeTab === 'dashboard' 
+                  ? 'bg-slate-800 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5 text-indigo-400" /> Workbench
+            </button>
+            <button
+              onClick={() => setActiveTab('python')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
+                activeTab === 'python' 
+                  ? 'bg-slate-800 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <FileCode className="w-3.5 h-3.5 text-purple-400" /> Python Script
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
+                activeTab === 'logs' 
+                  ? 'bg-slate-800 text-white shadow-md' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <TerminalIcon className="w-3.5 h-3.5 text-slate-300" /> Terminal
+            </button>
           </nav>
 
-          {/* Top Menus: OS Platform Dropdown, Purge VRAM Action, & Target Model */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Menu 1: Windows / Mac / Linux OS Dropdown Menu */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 rounded-xl text-xs font-mono text-slate-300 shadow-sm transition-all">
-              <Monitor className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-              <span className="text-[11px] text-slate-400 font-sans hidden sm:inline">OS:</span>
-              <select
-                value={config.targetOS}
-                onChange={(e) => {
-                  const newOS = e.target.value as OperatingSystem;
-                  setConfig(prev => ({ ...prev, targetOS: newOS }));
-                  addLog('system', `OS Platform set to ${getOSLabel(newOS)}.`);
-                }}
-                className="bg-transparent text-white font-bold outline-none cursor-pointer text-xs pr-1"
-                title="Active Operating System (Windows / macOS / Linux)"
-              >
-                <option value="windows" className="bg-slate-900 text-white">Windows (PC/Laptop)</option>
-                <option value="macos" className="bg-slate-900 text-white">macOS (Apple Silicon/Intel)</option>
-                <option value="linux" className="bg-slate-900 text-white">Linux (x86_64)</option>
-              </select>
+          {/* Top Bar: Choose Model From PC & Quick Scan */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Windows PC Existing Model Selector */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/90 border border-slate-700/80 rounded-xl text-xs font-mono shadow-sm">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                connectionStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : connectionStatus === 'failed' ? 'bg-rose-400' : 'bg-amber-400'
+              }`} />
+              <span className="text-[11px] text-slate-400 font-sans hidden sm:inline">Model:</span>
+              
+              {availableModels.length > 0 ? (
+                <select
+                  value={config.model}
+                  onChange={(e) => {
+                    const chosen = e.target.value;
+                    setConfig(prev => ({ ...prev, model: chosen }));
+                    addLog('system', `Switched active target model to: ${chosen}`);
+                  }}
+                  className="bg-transparent text-white font-bold outline-none cursor-pointer text-xs pr-1 font-mono max-w-[150px] truncate"
+                  title="Choose from existing models installed on this PC"
+                >
+                  {availableModels.map(m => (
+                    <option key={m.name} value={m.name} className="bg-slate-900 text-white">
+                      {m.name} {m.size ? `(${(m.size / (1024 * 1024 * 1024)).toFixed(1)} GB)` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  onClick={() => setActiveTab('models')}
+                  className="text-white font-bold text-xs hover:text-sky-300 font-mono transition-colors"
+                  title="Click to choose or scan local models"
+                >
+                  {config.model}
+                </button>
+              )}
             </div>
 
-            {/* Menu 2: Purge VRAM Menu Action */}
+            {/* Quick Scan PC Button */}
             <button
-              onClick={handlePurgeVram}
-              disabled={isPurgingVram}
-              className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-xl border font-mono font-semibold transition-all shadow-sm ${
-                purgeSuccess 
-                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-emerald-500/10' 
-                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-slate-700/80 hover:border-slate-600'
-              }`}
-              title="Purge VRAM: Evict active model from GPU/RAM memory to free system resources"
+              onClick={checkOllamaConnection}
+              disabled={isRefreshingModels}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 rounded-xl text-xs font-mono transition-all disabled:opacity-50 shadow-sm"
+              title="Scan Windows PC for local Ollama models"
             >
-              {isPurgingVram ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-400" />
-              ) : purgeSuccess ? (
-                <span className="text-emerald-400 font-bold text-[11px]">✓ Purged</span>
-              ) : (
-                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              )}
-              <span>{isPurgingVram ? 'Purging...' : purgeSuccess ? 'VRAM Cleared' : 'Purge VRAM'}</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isRefreshingModels ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline text-[11px]">{isRefreshingModels ? 'Scanning...' : 'Scan PC'}</span>
             </button>
 
-            {/* Model Status Badge Shortcut */}
+            {/* Link to Full Models Manager */}
             <button
-              onClick={() => setActiveTab('config')}
-              className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/90 hover:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700/80 hover:border-slate-600 font-mono transition-all group"
-              title="Click to configure active Ollama model"
+              onClick={() => setActiveTab('models')}
+              className={`p-1.5 rounded-xl border text-xs font-mono transition-all ${
+                activeTab === 'models' 
+                  ? 'bg-sky-600/30 border-sky-500 text-sky-300' 
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-slate-700/80 text-slate-400 hover:text-slate-200'
+              }`}
+              title="Open Windows PC Models Manager"
             >
-              <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : connectionStatus === 'failed' ? 'bg-rose-400' : 'bg-amber-400'}`} />
-              <span>Target: <span className="text-white font-semibold group-hover:text-sky-300 transition-colors">{config.model}</span></span>
-              <span className="text-[10px] text-slate-500 group-hover:text-slate-400 ml-0.5">✎</span>
+              <Layers className="w-4 h-4" />
             </button>
           </div>
 
@@ -894,24 +912,28 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
               onSendQuery={sendQueryToOllama}
               onSelectTab={(tab) => setActiveTab(tab as any)}
             />
-          ) : activeTab === 'config' ? (
-            /* VOICE SETUP: Full view for model, wake-words, TTS, and LLM hyperparameters */
-            <OllamaConfig
+          ) : activeTab === 'models' ? (
+            /* MODELS VIEW: Discover, Choose Existing Models on Windows PC, and LLM Hyperparameters */
+            <ModelsView
               config={config}
               onChange={setConfig}
+              availableModels={availableModels}
               onRefreshModels={async () => {
                 await checkOllamaConnection();
                 return availableModels;
               }}
-              availableModels={availableModels}
-              isRefreshingModels={connectionStatus === 'checking'}
+              isRefreshingModels={isRefreshingModels}
               connectionStatus={connectionStatus}
-              onPurgeVram={handlePurgeVram}
-              isPurgingVram={isPurgingVram}
-              purgeSuccess={purgeSuccess}
               onClearSessionContext={handleClearSessionContext}
               sessionTurnsCount={Math.floor(sessionMessages.length / 2)}
-              onToggleLowVramMode={handleToggleLowVramMode}
+            />
+          ) : activeTab === 'voice' || activeTab === 'config' ? (
+            /* VOICE SETUP: Pure Speech Synthesis, Narrator Voices, Wake Word & Microphone Engine (No model configs) */
+            <VoiceSetupView
+              config={config}
+              onChange={setConfig}
+              isListening={isListeningRef.current}
+              onToggleListening={isListeningRef.current ? handleStopListening : handleStartListening}
             />
           ) : activeTab === 'dashboard' ? (
             /* WORKBENCH: Full view for telemetry charts, latency breakdowns, and prompt advice */

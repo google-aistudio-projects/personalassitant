@@ -58,7 +58,7 @@ interface StudioViewProps {
   onStopSpeaking: () => void;
   onSpeakText: (text: string) => void;
   onSendQuery: (prompt: string) => void;
-  onSelectTab: (tab: 'studio' | 'config' | 'dashboard' | 'python') => void;
+  onSelectTab: (tab: 'studio' | 'models' | 'voice' | 'config' | 'dashboard' | 'python' | 'monitoring' | 'logs') => void;
 }
 
 export default function StudioView({
@@ -616,11 +616,11 @@ export default function StudioView({
                 </button>
 
                 <button
-                  onClick={() => onSelectTab('config')}
+                  onClick={() => onSelectTab('models')}
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition font-mono"
-                  title="Adjust Temperature, Top-P, Context"
+                  title="Adjust Temperature, Top-P, Context & Models"
                 >
-                  <Sliders className="w-3.5 h-3.5 text-orange-400" />
+                  <Sliders className="w-3.5 h-3.5 text-sky-400" />
                   <span>Tuning ({config.temperature})</span>
                 </button>
               </div>
