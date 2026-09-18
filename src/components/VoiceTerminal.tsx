@@ -10,9 +10,9 @@ interface VoiceTerminalProps {
   manualText: string;
   setManualText: (text: string) => void;
   onSendManualText: () => void;
-  onStartListening: () => void;
-  onStopListening: () => void;
-  isListening: boolean;
+  onStartListening?: () => void;
+  onStopListening?: () => void;
+  isListening?: boolean;
 }
 
 export default function VoiceTerminal({
@@ -23,11 +23,9 @@ export default function VoiceTerminal({
   manualText,
   setManualText,
   onSendManualText,
-  onStartListening,
-  onStopListening,
-  isListening,
 }: VoiceTerminalProps) {
   const terminalEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom of logs
   useEffect(() => {
@@ -94,17 +92,14 @@ export default function VoiceTerminal({
             </button>
           )}
 
-          {/* Toggle Listening Button */}
+          {/* Windows Voice Typing helper button */}
           <button
-            onClick={isListening ? onStopListening : onStartListening}
-            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-medium rounded-lg border transition-all ${
-              isListening
-                ? 'bg-rose-500/10 border-rose-500/20 hover:bg-rose-500/20 text-rose-400'
-                : 'bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400'
-            }`}
+            onClick={() => inputRef.current?.focus()}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-medium rounded-lg border bg-sky-950/40 border-sky-800/60 hover:bg-sky-900/60 text-sky-300 transition-all cursor-pointer"
+            title="Press Win + H to dictate text"
           >
-            <Mic className="w-3.5 h-3.5" />
-            {isListening ? 'Disable Voice' : 'Enable Voice'}
+            <span className="text-[10px] px-1 py-0.2 bg-sky-500/20 rounded border border-sky-400/30">⊞ Win + H</span>
+            <span>Voice Typing</span>
           </button>
 
           {/* Clear Button */}
@@ -123,8 +118,8 @@ export default function VoiceTerminal({
         {logs.length === 0 ? (
           <div className="text-slate-600 h-full flex flex-col items-center justify-center gap-2 select-none">
             <ShieldCheck className="w-8 h-8 text-slate-700 animate-pulse" />
-            <span>Terminal initialized. Awaiting system wake triggers...</span>
-            <span className="text-[10px] text-slate-700">Click "Enable Voice" above to begin voice interaction.</span>
+            <span>Terminal initialized. Ready for diagnostics and commands.</span>
+            <span className="text-[10px] text-slate-500">Type below or press Win + H for Windows Voice Typing.</span>
           </div>
         ) : (
           logs.map((log) => (
@@ -146,12 +141,13 @@ export default function VoiceTerminal({
       <div className="bg-slate-900 p-3 border-t border-slate-800">
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             type="text"
             value={manualText}
             onChange={(e) => setManualText(e.target.value)}
             onKeyPress={handleKeyPress}
             className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-sky-500 placeholder-slate-600"
-            placeholder="Type manually here... (Fallback for quiet rooms or if Mic/CORS is blocked)"
+            placeholder="Type command or press Win + H to dictate using Windows Voice Typing..."
           />
           <button
             onClick={onSendManualText}

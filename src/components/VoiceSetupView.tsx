@@ -27,14 +27,14 @@ interface VoiceSetupViewProps {
 export default function VoiceSetupView({
   config,
   onChange,
-  isListening = false,
-  onToggleListening
 }: VoiceSetupViewProps) {
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isAuditioning, setIsAuditioning] = useState(false);
   const [testPhrase, setTestPhrase] = useState(
     'Hello! I am your Peacock voice companion running locally on your PC. How can I help you today?'
   );
+  const [dictationTestText, setDictationTestText] = useState('');
+  const testInputRef = React.useRef<HTMLTextAreaElement>(null);
 
   // Load available speech synthesis voices from the browser/OS
   useEffect(() => {
@@ -137,69 +137,99 @@ export default function VoiceSetupView({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* Column 1: Speech-to-Text & Wake Word Activation */}
+        {/* Column 1: Windows Voice Typing (Win + H) Setup & Practice */}
         <div className="space-y-6">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
-            <h3 className="text-sm font-semibold text-white font-mono uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
-              <Mic className="w-4 h-4 text-sky-400" /> Microphone & Hands-Free Capture
-            </h3>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-semibold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                <Mic className="w-4 h-4 text-sky-400" /> Windows Voice Typing (Speech-to-Text)
+              </h3>
+              <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold border border-sky-400/30 text-[10px] font-mono">
+                Native OS
+              </span>
+            </div>
 
-            {/* Mic Toggle Card */}
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/90 flex items-center justify-between gap-3">
+            {/* Quick Shortcut Card */}
+            <div className="p-4 rounded-xl bg-gradient-to-r from-sky-950/50 via-indigo-950/30 to-slate-950 border border-sky-800/60 flex items-center justify-between gap-4">
               <div>
-                <span className="text-xs font-bold text-white block">Continuous Speech Recognition</span>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Keeps the microphone active in the background and waits for your spoken wake word.
+                <span className="text-xs font-bold text-white block flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-sky-400" /> Press Windows Key + H
+                </span>
+                <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                  Windows built-in voice-over-text typing provides instant dictation with zero browser latency and automatic punctuation.
                 </p>
               </div>
-              {onToggleListening && (
-                <button
-                  type="button"
-                  onClick={onToggleListening}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border shrink-0 ${
-                    isListening
-                      ? 'bg-rose-500 text-white border-rose-400 shadow-md shadow-rose-500/20 animate-pulse'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                  }`}
-                >
-                  {isListening ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-                  <span>{isListening ? 'MIC ACTIVE' : 'MIC IDLE'}</span>
-                </button>
-              )}
-            </div>
-
-            {/* Wake Word Activation */}
-            <div>
-              <label className="block text-slate-400 text-xs font-mono mb-1.5 uppercase tracking-wider">
-                Wake Word Activation Phrase
-              </label>
-              <select
-                name="wakeWord"
-                value={config.wakeWord}
-                onChange={handleTextChange}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-sky-500"
-              >
-                <option value="computer">"Computer" (Star Trek Classic)</option>
-                <option value="ollama">"Ollama" (Direct Model Trigger)</option>
-                <option value="assistant">"Assistant" (Natural Assistant)</option>
-                <option value="jarvis">"Jarvis" (Sci-Fi / Tony Stark)</option>
-                <option value="none">None (Click-to-speak only / no wake word trigger)</option>
-              </select>
-              <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
-                When hands-free mode is enabled, speaking this word will instantly activate voice query capture and send the prompt to Ollama.
-              </p>
-            </div>
-
-            {/* Voice Assistant Speech Persona Tips */}
-            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-sky-400 font-mono font-bold">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Audio Response Guidelines</span>
+              <div className="flex items-center gap-1 shrink-0 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-lg text-sky-300 font-mono font-bold text-xs shadow-inner">
+                <span>⊞ Win</span>
+                <span>+</span>
+                <span>H</span>
               </div>
-              <p className="text-slate-400 text-[11px] leading-relaxed">
-                For optimal speech synthesis recitation, keep model outputs concise (2 to 3 sentences) and avoid complex markdown tables when relying purely on spoken responses.
-              </p>
             </div>
+
+            {/* Practice / Test Input */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-slate-400 text-xs font-mono uppercase tracking-wider flex items-center gap-1">
+                  <span>Dictation Test Pad</span>
+                </label>
+                {dictationTestText && (
+                  <button
+                    onClick={() => setDictationTestText('')}
+                    className="text-[10px] text-rose-400 hover:text-rose-300 font-mono"
+                  >
+                    Clear Text
+                  </button>
+                )}
+              </div>
+              <div className="relative rounded-xl border border-slate-800 focus-within:border-sky-500 bg-slate-950">
+                <textarea
+                  ref={testInputRef}
+                  value={dictationTestText}
+                  onChange={(e) => setDictationTestText(e.target.value)}
+                  rows={3}
+                  placeholder="Click here and press Win + H on your keyboard to test speech-to-text dictation..."
+                  className="w-full bg-transparent p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none resize-none font-sans"
+                />
+                <div className="px-3 py-1.5 border-t border-slate-900 bg-slate-950/80 rounded-b-xl flex items-center justify-between text-[10px] font-mono text-slate-400">
+                  <span>Click box ➔ Press Win + H ➔ Speak</span>
+                  {dictationTestText && <span className="text-emerald-400">✓ Dictation received</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Why Windows Voice Typing is Better */}
+            <div className="grid grid-cols-1 gap-2.5 pt-1">
+              <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 space-y-1 text-xs">
+                <div className="flex items-center gap-1.5 text-sky-400 font-mono font-semibold text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Zero CPU & RAM Overhead for Transcription</span>
+                </div>
+                <p className="text-slate-400 text-[11px] leading-relaxed">
+                  Windows handles speech recognition at the operating system level, leaving 100% of your Intel i7 CPU cores and RAM dedicated to running Ollama LLM inferences.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 space-y-1 text-xs">
+                <div className="flex items-center gap-1.5 text-emerald-400 font-mono font-semibold text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Automatic Punctuation & Capitalization</span>
+                </div>
+                <p className="text-slate-400 text-[11px] leading-relaxed">
+                  Automatically inserts question marks, periods, commas, and capitalizes proper nouns without requiring manual punctuation tags.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 space-y-1 text-xs">
+                <div className="flex items-center gap-1.5 text-teal-400 font-mono font-semibold text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Voice Punctuation Commands</span>
+                </div>
+                <p className="text-slate-400 text-[11px] leading-relaxed font-mono">
+                  Say "comma", "period", "new line", or "question mark" anytime to format prompts while speaking.
+                </p>
+              </div>
+            </div>
+
           </div>
         </div>
 

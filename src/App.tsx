@@ -35,7 +35,6 @@ import {
   Gauge
 } from 'lucide-react';
 
-const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
 const playChime = (type: 'wake' | 'success' | 'error') => {
   if (typeof window === 'undefined') return;
@@ -113,9 +112,7 @@ export default function App() {
 
   // Navigation: studio (default), models (Ollama Model Manager), voice (Pure Voice Setup), monitoring (Hardware), dashboard (Workbench), python (Python Script), logs (Live Terminal)
   const [activeTab, setActiveTab] = useState<'studio' | 'models' | 'voice' | 'config' | 'monitoring' | 'dashboard' | 'python' | 'logs'>('studio');
-  const [status, setStatus] = useState<'idle' | 'listening_wake' | 'recording_command' | 'processing' | 'speaking' | 'disabled'>(
-    SpeechRecognition ? 'idle' : 'disabled'
-  );
+  const [status, setStatus] = useState<'idle' | 'processing' | 'speaking'>('idle');
   
   const [logs, setLogs] = useState<TerminalLog[]>([]);
   const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
@@ -198,9 +195,6 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
 
   const [showTroubleshooting, setShowTroubleshooting] = useState(false);
 
-  // Speech engine refs
-  const recognitionRef = useRef<any>(null);
-  const isListeningRef = useRef(false);
   const configRef = useRef(config);
   const statusRef = useRef(status);
   const isSpeakingRef = useRef(false);
@@ -249,10 +243,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
 
   useEffect(() => {
     checkOllamaConnection();
-    addLog('system', 'Voice Terminal initialized. SpeechRecognition Engine ' + (SpeechRecognition ? 'Ready' : 'Not Supported'));
-    if (!SpeechRecognition) {
-      addLog('error', 'Your browser does not support Web Speech Recognition. Use Chrome or configure the Local Python Client!');
-    }
+    addLog('system', 'Peacock Studio initialized. Ready for local Ollama queries and Windows Voice Typing (Win + H).');
   }, []);
 
   // Voice Speech Synthesis Handler
@@ -303,11 +294,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
   };
 
   const handleSpeechCompleted = () => {
-    if (configRef.current.continuousListening && isListeningRef.current) {
-      startListeningLoop();
-    } else {
-      setStatus('idle');
-    }
+    setStatus('idle');
   };
 
   // Interrupt Speech Synthesis
@@ -316,11 +303,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
       window.speechSynthesis.cancel();
     }
     addLog('system', 'Speech stopped by user.');
-    if (configRef.current.continuousListening && isListeningRef.current) {
-      startListeningLoop();
-    } else {
-      setStatus('idle');
-    }
+    setStatus('idle');
   };
 
   // Send query to Ollama API with Sessionful Context Chaining & VRAM Management
@@ -467,12 +450,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
         ? 'Ollama request timed out (60s). If your model is large, switch to Low-VRAM mode or a lighter model like llama3.2:1b.'
         : `Request Failed: Could not contact Ollama. Ensure your local Ollama server is running (with CORS enabled via OLLAMA_ORIGINS="*")`;
       addLog('error', errorMsg);
-      
-      if (configRef.current.continuousListening && isListeningRef.current) {
-        startListeningLoop();
-      } else {
-        setStatus('idle');
-      }
+      setStatus('idle');
     }
   };
 
@@ -533,156 +511,6 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
     }
   };
 
-  // Web Speech recognition loop
-  const startListeningLoop = () => {
-    if (!SpeechRecognition) return;
-
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch (e) {}
-    }
-
-    const rec = new SpeechRecognition();
-    recognitionRef.current = rec;
-    rec.continuous = false;
-    rec.interimResults = true;
-    rec.lang = 'en-US';
-
-    const hasWakeWord = configRef.current.wakeWord !== 'none';
-    setStatus(hasWakeWord ? 'listening_wake' : 'recording_command');
-    
-    if (hasWakeWord) {
-      addLog('listening', `Standby active. Listening for wake word "${configRef.current.wakeWord}"...`);
-    } else {
-      addLog('listening', `Microphone active. Listening for command...`);
-    }
-
-    let finalTranscript = '';
-
-    rec.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        }
-      }
-    };
-
-    rec.onend = () => {
-      const phrase = finalTranscript.trim().toLowerCase();
-      if (phrase) {
-        addLog('user', `Voice heard: "${phrase}"`);
-        
-        if (statusRef.current === 'listening_wake') {
-          const targetWake = configRef.current.wakeWord.toLowerCase();
-          if (phrase.includes(targetWake)) {
-            playChime('wake');
-            addLog('system', `Wake word "${configRef.current.wakeWord}" triggered! Capturing command...`);
-            setStatus('recording_command');
-            
-            setTimeout(() => {
-              startFocusedCommandCapture();
-            }, 100);
-          } else {
-            if (isListeningRef.current) {
-              startListeningLoop();
-            }
-          }
-        } else {
-          sendQueryToOllama(phrase);
-        }
-      } else {
-        if (isListeningRef.current && statusRef.current !== 'processing' && statusRef.current !== 'speaking') {
-          startListeningLoop();
-        }
-      }
-    };
-
-    rec.onerror = (e: any) => {
-      if (e.error !== 'no-speech') {
-        console.warn('Speech Recognition Error:', e.error);
-        if (e.error === 'not-allowed') {
-          addLog('error', 'Microphone permission denied. Open app in a new tab to grant access.');
-          isListeningRef.current = false;
-          setStatus('disabled');
-        }
-      }
-    };
-
-    try {
-      rec.start();
-    } catch (err) {
-      console.error('Error starting recognition:', err);
-    }
-  };
-
-  const startFocusedCommandCapture = () => {
-    if (!SpeechRecognition) return;
-
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (e) {}
-    }
-
-    const rec = new SpeechRecognition();
-    recognitionRef.current = rec;
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.lang = 'en-US';
-
-    let capturedCommand = '';
-
-    rec.onresult = (event: any) => {
-      if (event.results.length > 0) {
-        capturedCommand = event.results[0][0].transcript;
-      }
-    };
-
-    rec.onend = () => {
-      const text = capturedCommand.trim();
-      if (text) {
-        addLog('user', `Command: "${text}"`);
-        sendQueryToOllama(text);
-      } else {
-        addLog('system', 'No command detected. Returning to standby.');
-        if (isListeningRef.current) {
-          startListeningLoop();
-        } else {
-          setStatus('idle');
-        }
-      }
-    };
-
-    rec.onerror = (e: any) => {
-      console.warn('Capture error:', e.error);
-    };
-
-    try {
-      rec.start();
-    } catch (e) {}
-  };
-
-  const handleStartListening = () => {
-    if (!SpeechRecognition) {
-      addLog('error', 'Speech recognition not supported on this browser.');
-      return;
-    }
-    isListeningRef.current = true;
-    addLog('system', 'Voice interaction engine started.');
-    startListeningLoop();
-  };
-
-  const handleStopListening = () => {
-    isListeningRef.current = false;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (e) {}
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setStatus('idle');
-    addLog('system', 'Voice interaction engine stopped.');
-  };
-
   const handleSendManualText = () => {
     if (!manualText.trim()) return;
     const query = manualText.trim();
@@ -691,9 +519,6 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
     
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-    }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (e) {}
     }
 
     sendQueryToOllama(query);
@@ -870,23 +695,6 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
 
       {/* Main Multi-Panel Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
-        
-        {/* Help Banner if Voice Engine needs mic access */}
-        {!SpeechRecognition && (
-          <div className="mb-6 p-4 bg-amber-950/40 border border-amber-800/50 rounded-2xl text-xs text-amber-300 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Web Speech Recognition is not supported by your current browser environment. Type in the prompt box or run the standalone Python script locally!</span>
-            </div>
-            <button
-              onClick={() => setActiveTab('python')}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg transition shrink-0"
-            >
-              View Python Script
-            </button>
-          </div>
-        )}
-
         {/* View Routing */}
         <div className="flex-1">
           {activeTab === 'studio' ? (
@@ -904,9 +712,6 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
               purgeSuccess={purgeSuccess}
               onToggleLowVramMode={handleToggleLowVramMode}
               isSpeaking={status === 'speaking'}
-              isListening={isListeningRef.current}
-              onStartListening={handleStartListening}
-              onStopListening={handleStopListening}
               onStopSpeaking={stopSpeaking}
               onSpeakText={speakResponse}
               onSendQuery={sendQueryToOllama}
@@ -928,12 +733,10 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
               sessionTurnsCount={Math.floor(sessionMessages.length / 2)}
             />
           ) : activeTab === 'voice' || activeTab === 'config' ? (
-            /* VOICE SETUP: Pure Speech Synthesis, Narrator Voices, Wake Word & Microphone Engine (No model configs) */
+            /* VOICE SETUP: Pure Speech Synthesis, Narrator Voices, and Windows Voice Typing */
             <VoiceSetupView
               config={config}
               onChange={setConfig}
-              isListening={isListeningRef.current}
-              onToggleListening={isListeningRef.current ? handleStopListening : handleStartListening}
             />
           ) : activeTab === 'dashboard' ? (
             /* WORKBENCH: Full view for telemetry charts, latency breakdowns, and prompt advice */
@@ -959,7 +762,7 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
             /* TERMINAL LOGS: Raw interactive terminal view */
             <div className="max-w-4xl mx-auto space-y-4">
               <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                <span>Real-Time Speech Engine Diagnostics & Command Pipeline</span>
+                <span>Real-Time Engine Diagnostics & Command Pipeline</span>
                 <button
                   onClick={() => setActiveTab('studio')}
                   className="text-sky-400 hover:underline flex items-center gap-1"
@@ -975,9 +778,6 @@ def init_local_ai_db(db_path: str = "ai_workspace.db"):
                 manualText={manualText}
                 setManualText={setManualText}
                 onSendManualText={handleSendManualText}
-                onStartListening={handleStartListening}
-                onStopListening={handleStopListening}
-                isListening={isListeningRef.current}
               />
             </div>
           )}

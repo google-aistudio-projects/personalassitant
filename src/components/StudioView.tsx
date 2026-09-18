@@ -3,11 +3,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceConfig, MetricsRun, ResponseMetrics, ChatMessage } from '../types';
-import VoiceWaveform from './VoiceWaveform';
 import { 
   Send, 
   Mic, 
-  MicOff, 
   Volume2, 
   VolumeX, 
   Download, 
@@ -42,7 +40,7 @@ import {
 interface StudioViewProps {
   config: VoiceConfig;
   onChangeConfig?: React.Dispatch<React.SetStateAction<VoiceConfig>>;
-  status: 'idle' | 'listening_wake' | 'recording_command' | 'processing' | 'speaking' | 'disabled';
+  status: string;
   runs: MetricsRun[];
   latestMetrics: ResponseMetrics | null;
   sessionMessages?: ChatMessage[];
@@ -52,9 +50,9 @@ interface StudioViewProps {
   purgeSuccess?: boolean;
   onToggleLowVramMode?: (enable?: boolean) => void;
   isSpeaking: boolean;
-  isListening: boolean;
-  onStartListening: () => void;
-  onStopListening: () => void;
+  isListening?: boolean;
+  onStartListening?: () => void;
+  onStopListening?: () => void;
   onStopSpeaking: () => void;
   onSpeakText: (text: string) => void;
   onSendQuery: (prompt: string) => void;
@@ -74,9 +72,6 @@ export default function StudioView({
   purgeSuccess = false,
   onToggleLowVramMode,
   isSpeaking,
-  isListening,
-  onStartListening,
-  onStopListening,
   onStopSpeaking,
   onSpeakText,
   onSendQuery,
@@ -89,7 +84,6 @@ export default function StudioView({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   const [showContextPreview, setShowContextPreview] = useState(false);
-  const [showWaveform, setShowWaveform] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const printContainerRef = useRef<HTMLDivElement>(null);
   const outputOnlyRef = useRef<HTMLDivElement>(null);
@@ -506,29 +500,14 @@ export default function StudioView({
 
         {/* Quick Actions & Status */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Hands-free Voice Toggle */}
+          {/* Windows Voice Typing Helper Button */}
           <button
-            onClick={isListening ? onStopListening : onStartListening}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all border shadow-sm ${
-              isListening 
-                ? 'bg-rose-500/15 border-rose-500/30 text-rose-300 hover:bg-rose-500/25 animate-pulse'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-            }`}
-            title="Toggle Hands-Free Speech Engine"
+            onClick={() => textareaRef.current?.focus()}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all border shadow-sm bg-sky-950/40 hover:bg-sky-900/60 border-sky-700/60 text-sky-200"
+            title="Press Win + H on your keyboard to activate native Windows Voice Typing directly into the prompt box"
           >
-            {isListening ? <Mic className="w-4 h-4 text-rose-400" /> : <MicOff className="w-4 h-4 text-slate-400" />}
-            <span>{isListening ? `Listening for "${config.wakeWord}"` : 'Enable Hands-Free Mic'}</span>
-          </button>
-
-          {/* Quick Voice Waveform Drawer Toggle */}
-          <button
-            onClick={() => setShowWaveform(!showWaveform)}
-            className={`px-3 py-2 rounded-xl text-xs font-mono border transition-all ${
-              showWaveform ? 'bg-indigo-950/60 border-indigo-700/50 text-indigo-300' : 'bg-slate-800/80 border-slate-700 text-slate-400'
-            }`}
-            title="Toggle Audio Visualizer"
-          >
-            {showWaveform ? 'Waveform: ON' : 'Waveform: OFF'}
+            <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold border border-sky-400/30 text-[10px]">⊞ Win + H</span>
+            <span>Windows Voice Typing</span>
           </button>
 
           {/* History Drawer Toggle */}
@@ -634,22 +613,6 @@ export default function StudioView({
         )}
       </AnimatePresence>
 
-      {/* Audio Waveform Bar if active or enabled */}
-      <AnimatePresence>
-        {showWaveform && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <VoiceWaveform 
-              status={status} 
-              wakeWord={config.wakeWord} 
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Session History Drawer (Collapsible) */}
       <AnimatePresence>
@@ -716,7 +679,16 @@ export default function StudioView({
                     Request Sending Window
                   </h3>
                 </div>
-                <div className="flex items-center gap-1 text-[11px] font-mono text-slate-400">
+                <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                  <button
+                    onClick={() => textareaRef.current?.focus()}
+                    className="text-sky-300 hover:text-sky-200 font-semibold flex items-center gap-1 bg-sky-950/70 hover:bg-sky-900/80 px-2 py-0.5 rounded-lg border border-sky-700/50 cursor-pointer transition-colors"
+                    title="Click here or focus prompt box, then press Win + H to speak"
+                  >
+                    <Mic className="w-3 h-3 text-sky-400" />
+                    <span>⊞ Win + H Dictation</span>
+                  </button>
+                  <span>•</span>
                   <span>{wordCount} words</span>
                   <span>•</span>
                   <span>{charCount} chars</span>
@@ -760,7 +732,7 @@ export default function StudioView({
                   onChange={(e) => setPromptText(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={8}
-                  placeholder={`Type your extensive prompt here, or use voice commands...\n\nExamples:\n• "Compare PostgreSQL vs SQLite for local AI applications with a comparison table."\n• "Explain how attention mechanisms work with step-by-step math."\n\n(Tip: Press Ctrl+Enter or Cmd+Enter to send)`}
+                  placeholder={`Type your extensive prompt here, or press Win + H for Windows Voice Typing...\n\nExamples:\n• "Compare PostgreSQL vs SQLite for local AI applications with a comparison table."\n• "Explain how attention mechanisms work with step-by-step math."\n\n(Tip: Press Win + H to dictate speech • Ctrl+Enter to send)`}
                   className="w-full bg-transparent p-4 text-sm text-slate-100 placeholder-slate-600 focus:outline-none resize-y font-sans leading-relaxed min-h-[180px]"
                 />
 
@@ -960,7 +932,7 @@ export default function StudioView({
                   </div>
                   <h4 className="text-white font-medium text-base mb-1">Awaiting Generation Query</h4>
                   <p className="text-xs text-slate-400 max-w-md leading-relaxed">
-                    Submit a prompt in the Request Sending Window or say <strong className="text-sky-400 font-mono font-semibold">"{config.wakeWord}"</strong> to see extensive, fully-formatted markdown responses rendered here.
+                    Submit a prompt in the Request Sending Window or press <strong className="text-sky-400 font-mono font-semibold">Win + H</strong> for Windows Voice Typing to see extensive, fully-formatted markdown responses rendered here.
                   </p>
                 </div>
               ) : activeViewMode === 'raw' ? (
